@@ -6,3 +6,4 @@ sentence-transformers
 torch
 tf-keras
 numpy
+groq

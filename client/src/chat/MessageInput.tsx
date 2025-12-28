@@ -17,14 +17,20 @@ export default function MessageInput({ onSend, disabled }: Props) {
   return (
     <div className="border-t border-nexus-border bg-nexus-input/30 p-4">
       <div className="flex items-center gap-3">
-        <input
+        <textarea
           value={text}
           disabled={disabled}
+          rows={1}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSend()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault()
+              handleSend()
+            }
+          }}
           placeholder={disabled ? "Nexus AI is replying…" : "Type a message..."}
           className="
-            flex-1 rounded-xl px-4 py-3 text-sm
+            flex-1 resize-none rounded-xl px-4 py-3 text-sm
             bg-nexus-card text-nexus-text
             placeholder:text-nexus-muted
             outline-none border border-nexus-border

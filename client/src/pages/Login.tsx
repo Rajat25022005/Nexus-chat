@@ -1,46 +1,76 @@
+import { useState } from "react"
+import { useNavigate } from "react-router-dom"
+import { useAuth } from "../context/AuthContext.tsx"
 import AuthLayout from "../components/AuthCard"
-import SocialButton from "../components/SocialButton"
-import { FaGoogle, FaApple, FaDiscord } from "react-icons/fa"
 import { Link } from "react-router-dom"
 
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
 
 export default function Login() {
+  const [email, setEmail] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+  const { login } = useAuth()
+  const navigate = useNavigate()
+
+  const handleLogin = async () => {
+    if (!isValidEmail(email)) {
+      setError("Please enter a valid email address")
+      return
+    }
+
+    setError("")
+    setLoading(true)
+
+    // simulate network delay
+    setTimeout(() => {
+      login(email)
+      navigate("/chat")
+    }, 800)
+  }
+
   return (
     <AuthLayout title="Login" subtitle="Welcome back">
-
       <input
-        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
         placeholder="Your email address"
-        className="mb-4 w-full rounded-lg bg-transparent border border-nexus-deep
-                   px-4 py-3 text-sm text-nexus-text placeholder-nexus-muted
-                   outline-none focus:ring-2 focus:ring-nexus-primary"
+        className="
+          mb-3 w-full rounded-lg
+          bg-nexus-input text-nexus-text
+          border border-nexus-border
+          px-4 py-3 text-sm
+          placeholder:text-nexus-muted
+          outline-none
+          focus:border-nexus-primary
+        "
       />
 
+      {error && (
+        <p className="mb-3 text-sm text-red-400">{error}</p>
+      )}
+
       <button
-        className="mb-6 w-full rounded-lg bg-nexus-primary py-3 font-medium
-                   hover:bg-nexus-primaryHover transition"
+        onClick={handleLogin}
+        disabled={loading || !email}
+        className="
+          w-full rounded-lg bg-nexus-primary py-3 font-medium
+          hover:opacity-90 transition
+          disabled:opacity-50
+        "
       >
-        Continue
+        {loading ? "Signing in…" : "Continue"}
       </button>
-
-      <div className="my-6 flex items-center gap-3 text-nexus-muted text-sm">
-        <div className="h-px flex-1 bg-nexus-divider" />
-        OR
-        <div className="h-px flex-1 bg-nexus-divider" />
-      </div>
-
-      <div className="space-y-3">
-        <SocialButton icon={<FaGoogle />} text="Continue with Google" />
-        <SocialButton icon={<FaApple />} text="Continue with Apple" />
-        <SocialButton icon={<FaDiscord />} text="Continue with Discord" />
-      </div>
-
       <p className="mt-6 text-center text-sm text-nexus-muted">
         Don’t have an account?{" "}
-        <Link to="/signup" className="text-nexus-primary hover:underline">
+        <Link
+          to="/signup"
+          className="text-nexus-primary hover:underline"
+        >
           Sign up
         </Link>
-
       </p>
 
     </AuthLayout>

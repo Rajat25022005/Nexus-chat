@@ -1,51 +1,44 @@
-from typing import List, Dict
-import numpy as np
+from datetime import datetime
+from typing import Optional
 
-class VectorRecord:
-    def __init__(self, id: str, vector: List[float], metadata: Dict):
-        self.id = id
-        self.vector = np.array(vector)
-        self.metadata = metadata
+from app.core.mongo import get_vector_collection
+from app.embeddings.embedder import embed_text
 
-
-class InMemoryVectorStore:
-    def __init__(self):
-        self.records: List[VectorRecord] = []
-
-    def add(self, record: VectorRecord):
-        self.records.append(record)
-
-    def similarity_search(
+class VectorStore:
+    def store_message(
         self,
-        query_vector: List[float],
-        room_id: str,
-        top_k: int = 5,
-    ) -> List[Dict]:
+        *,
+        group_id: str,
+        chat_id: str,
+        content: str,
+        role: str,
+        message_id: Optional[str] = None,
+    ):
         """
-        Cosine similarity search (room-scoped)
+        Store a message embedding in MongoDB for RAG.
+        
+        This is Nexus-safe:
+        - Scoped by group_id (workspace)
+        - Scoped by chat_id (thread)
         """
-        query = np.array(query_vector)
 
-        scored = []
-        for record in self.records:
-            if record.metadata.get("room_id") != room_id:
-                continue
+        if not content.strip():
+            return
 
-            score = self._cosine_similarity(query, record.vector)
-            scored.append((score, record))
+        collection = get_vector_collection()
 
-        scored.sort(key=lambda x: x[0], reverse=True)
+        # 1️⃣ Generate embedding
+        embedding = embed_text(content)
 
-        return [
-            {
-                "id": record.id,
-                "score": float(score),
-                "content": record.metadata.get("content"),
-                "metadata": record.metadata,
-            }
-            for score, record in scored[:top_k]
-        ]
+        document = {
+            "group_id": group_id,
+            "chat_id": chat_id,
+            "content": content,
+            "embedding": embedding,
+            "role": role,
+            "message_id": message_id,
+            "created_at": datetime.utcnow(),
+        }
 
-    @staticmethod
-    def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
-        return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+        collection.insert_one(document)
+vector_store = VectorStore()

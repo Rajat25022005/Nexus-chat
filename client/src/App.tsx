@@ -1,18 +1,18 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
-
+import { Routes, Route, Navigate } from "react-router-dom"
+import { useAuth } from "./context/AuthContext.tsx"
 import Login from "./pages/Login"
 import Signup from "./pages/Signup"
 import Chat from "./pages/Chat"
 
 export default function App() {
+  const { user } = useAuth()
+
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Navigate to="/login" />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/chat" element={<Chat />} />
-      </Routes>
-    </BrowserRouter>
+    <Routes>
+      <Route path="/login" element={user ? <Navigate to="/chat" /> : <Login />} />
+      <Route path="/signup" element={user ? <Navigate to="/chat" /> : <Signup />} />
+      <Route path="/chat" element={user ? <Chat /> : <Navigate to="/login" />} />
+      <Route path="*" element={<Navigate to="/chat" />} />
+    </Routes>
   )
 }

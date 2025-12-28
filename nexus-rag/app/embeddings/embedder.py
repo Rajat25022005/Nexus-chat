@@ -1,24 +1,24 @@
-from sentence_transformers import SentenceTransformer
 from typing import List
+from app.core.config import EMBEDDING_MODEL
+from sentence_transformers import SentenceTransformer
 
-class Embedder:
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
-        """
-        Lightweight, fast, production-proven embedding model.
-        Output dimension: 384
-        """
-        self.model = SentenceTransformer(model_name)
+# Load once (important for performance)
+_model = SentenceTransformer(EMBEDDING_MODEL)
 
-    def embed(self, text: str) -> List[float]:
-        """
-        Embed a single string.
-        """
-        vector = self.model.encode(text)
-        return vector.tolist()
 
-    def embed_batch(self, texts: List[str]) -> List[List[float]]:
-        """
-        Embed multiple strings at once.
-        """
-        vectors = self.model.encode(texts)
-        return vectors.tolist()
+def embed_text(text: str) -> List[float]:
+    """
+    Generate embedding for a given text.
+
+    Returns:
+        List[float] of length 384 (must match Mongo vector index)
+    """
+    embedding = _model.encode(text, normalize_embeddings=True)
+
+    # Safety check (DO NOT REMOVE)
+    if len(embedding) != 384:
+        raise ValueError(
+            f"Embedding dimension mismatch: expected 384, got {len(embedding)}"
+        )
+
+    return embedding.tolist()
