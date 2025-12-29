@@ -1,48 +1,38 @@
-from typing import List, Dict
-
+from typing import List, Any
 
 def build_prompt(
-    *,
     user_query: str,
-    retrieved_docs: List[Dict],
-    chat_history: List[Dict],
+    retrieved_docs: list,
+    chat_history: list,
 ) -> str:
-    """
-    Build a grounded RAG prompt for Nexus.
-    """
-
-    system_prompt = (
-        "You are Nexus AI, a collaborative workspace assistant.\n"
-        "Answer the user's question using ONLY the provided context.\n"
-        "If the answer is not in the context, say you do not know.\n"
-        "Be concise, clear, and accurate.\n"
+    context_block = "\n".join(
+        f"- {doc.get('content', '')}"
+        for doc in retrieved_docs
+        if doc.get("content")
     )
 
-    # Format retrieved context
-    context_block = "\n".join(
-        f"[Source {i+1}]\n{doc['content']}"
-        for i, doc in enumerate(retrieved_docs)
-    ) or "No relevant context found."
-
-    # Format recent chat history
     history_block = "\n".join(
-        f"{msg['role'].upper()}: {msg['content']}"
-        for msg in chat_history[-6:]  # last N messages
-    ) or "No prior conversation."
+        f"{msg.role.upper()}: {msg.content}"
+        for msg in chat_history
+    )
 
-    prompt = f"""
-{system_prompt}
+    return f"""
+You are Nexus AI, a helpful, intelligent collaboration assistant.
 
-### Retrieved Context
-{context_block}
+### DOCUMENT CONTEXT (optional):
+{context_block if context_block else "No relevant documents available."}
 
-### Conversation History
-{history_block}
+### CHAT HISTORY:
+{history_block if history_block else "No prior conversation."}
 
-### User Question
+### BEHAVIOR RULES:
+- If document context is available, use it.
+- If document context is missing, answer normally using your general knowledge.
+- You are allowed to write code, explain concepts, and help users.
+- Only say "I don't have enough context" if the question truly cannot be answered.
+
+### USER MESSAGE:
 {user_query}
 
-### Answer
+### ANSWER:
 """.strip()
-
-    return prompt

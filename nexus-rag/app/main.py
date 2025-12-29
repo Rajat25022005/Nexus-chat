@@ -34,3 +34,9 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+@app.on_event("startup")
+def debug_routes():
+    print("=== REGISTERED ROUTES ===")
+    for r in app.routes:
+        print(r.path, r.methods)

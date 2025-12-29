@@ -81,7 +81,12 @@ async def query_rag(request: QueryRequest):
         )
 
     except Exception as e:
+        import traceback
+        print("\n===== RAG QUERY ERROR =====")
+        traceback.print_exc()
+        print("===== END ERROR =====\n")
+
         raise HTTPException(
             status_code=500,
-            detail=f"RAG query failed: {str(e)}"
+            detail=str(e)
         )

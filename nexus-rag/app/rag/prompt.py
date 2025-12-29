@@ -1,20 +1,41 @@
-def build_prompt(context: list, query: str) -> str:
-    context_text = "\n".join(f"- {entry}" for entry in context)
+from typing import List
+from app.api.query import ChatMessage
+
+
+def build_prompt(
+    user_query: str,
+    retrieved_docs: List[dict],
+    chat_history: List[ChatMessage],
+) -> str:
+
+    context_block = "\n".join(
+        f"- {doc.get('content', '')}"
+        for doc in retrieved_docs
+        if doc.get("content")
+    )
+
+    history_block = "\n".join(
+        f"{msg.role.upper()}: {msg.content}"
+        for msg in chat_history
+    )
 
     return f"""
-You are Nexus AI, a strict assistant that answers strictly based on the provided documents.
+You are Nexus AI, a strict context-aware assistant inside a collaborative workspace.
 
 ### CONTEXT:
-{context_text}
+{context_block if context_block else "No relevant context found."}
+
+### CHAT HISTORY:
+{history_block if history_block else "No prior conversation."}
 
 ### RULES:
-1. You MUST answer the question using ONLY the information in the Context above.
-2. Do NOT use your outside knowledge, training data, or assumptions.
-3. If the Context does not contain the exact answer, you MUST say "I don't have enough context".
-4. Do not apologize or explain why, just say the phrase.
+1. You MUST answer using ONLY the CONTEXT.
+2. Do NOT use outside knowledge.
+3. If the answer is not present, say:
+   "I don't have enough context."
 
-### QUESTION:
-{query}
+### USER QUESTION:
+{user_query}
 
 ### ANSWER:
 """.strip()

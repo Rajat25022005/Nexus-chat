@@ -17,9 +17,8 @@ export async function queryRAG(params: {
   groupId: string
   chatId: string
   history: ChatMessage[]
-}): Promise<QueryResponse> {
-
-  const res = await fetch("http://127.0.0.1:8000/rag/query", {
+}) {
+  const res = await fetch("http://localhost:8000/api/query", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -33,9 +32,7 @@ export async function queryRAG(params: {
   })
 
   if (!res.ok) {
-    const text = await res.text()
-    console.error("RAG backend error:", text)
-    throw new Error("RAG request failed")
+    throw new Error(await res.text())
   }
 
   return res.json()
