@@ -1,11 +1,6 @@
-# Ignore all node_modules in client, server, and root
 node_modules/
-
-# Ignore python virtual environments
 venv/
 nexus-rag/venv/
 __pycache__/
-
-# Ignore environment variables (Security best practice)
 .env
 .DS_Store
