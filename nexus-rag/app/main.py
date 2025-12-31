@@ -1,17 +1,20 @@
 from dotenv import load_dotenv
-load_dotenv()  # 👈 MUST BE FIRST
+load_dotenv()
+from app.auth.router import router as auth_router
+
 
 from fastapi import FastAPI
 from app.api.ingest import router as ingest_router
 from app.api.query import router as query_router
 from fastapi.middleware.cors import CORSMiddleware
+from app.api.messages import router as messages_router
+
 
 app = FastAPI(
     title="Nexus RAG Service",
     description="Context-aware RAG backend for Nexus",
     version="0.1.0",
 )
-from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(
     CORSMiddleware,
@@ -26,6 +29,9 @@ app.add_middleware(
 
 app.include_router(query_router, prefix="/api", tags=["Query"])
 app.include_router(ingest_router, prefix="/api", tags=["Ingest"])
+app.include_router(auth_router)
+app.include_router(messages_router)
+
 
 @app.get("/")
 def root():
@@ -40,3 +46,6 @@ def debug_routes():
     print("=== REGISTERED ROUTES ===")
     for r in app.routes:
         print(r.path, r.methods)
+
+
+

@@ -1,4 +1,5 @@
 from pymongo import MongoClient
+
 from app.core.config import (
     MONGO_URI,
     MONGO_DB_NAME,
@@ -7,10 +8,11 @@ from app.core.config import (
 _client = MongoClient(MONGO_URI)
 _db = _client[MONGO_DB_NAME]
 
+def get_db():
+    return _db
 
 def get_vector_collection():
-    """
-    Returns the MongoDB collection that stores
-    vector-embedded messages for RAG.
-    """
     return _db[VECTOR_COLLECTION_NAME]
+
+def get_message_collection():
+    return _db["messages"]

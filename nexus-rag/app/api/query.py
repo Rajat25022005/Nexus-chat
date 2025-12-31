@@ -1,6 +1,10 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from typing import List, Optional
+from app.auth.dependencies import get_current_user
+from app.core.mongo import get_message_collection
+from datetime import datetime
+
 
 from app.rag.retriever import retrieve_context
 from app.generator.prompt import build_prompt
@@ -33,17 +37,21 @@ class QueryResponse(BaseModel):
     sources: List[SourceChunk]
 
 @router.post("/query", response_model=QueryResponse)
-async def query_rag(request: QueryRequest):
-    """
-    Nexus RAG Query Endpoint
-
-    - Scoped by group_id and chat_id
-    - Uses recent conversation history
-    - Returns answer + sources (for explainability)
-    """
-
+async def query_rag(
+    request: QueryRequest,
+    user=Depends(get_current_user)
+):
     try:
-        # 1️⃣ Retrieve relevant context (RAG)
+        messages = get_message_collection()
+        messages.insert_one({
+            "user_id": user["email"], 
+            "group_id": request.group_id,
+            "chat_id": request.chat_id,
+            "role": "user",
+            "content": request.query,
+            "created_at": datetime.utcnow(),
+        })
+
         documents = retrieve_context(
             query=request.query,
             group_id=request.group_id,
@@ -51,42 +59,37 @@ async def query_rag(request: QueryRequest):
             top_k=5,
         )
 
-        # documents = [
-        #   { "id": "...", "content": "...", "score": 0.82 }
-        # ]
-
-        # 2️⃣ Build RAG-aware prompt
         prompt = build_prompt(
             user_query=request.query,
             retrieved_docs=documents,
             chat_history=request.history,
         )
 
-        # 3️⃣ Generate response from LLM
         answer = generate_answer(prompt)
 
-        # 4️⃣ Format sources for frontend
-        sources = [
-            SourceChunk(
-                id=str(doc.get("id")),
-                score=float(doc.get("score", 0)),
-                content=doc.get("content"),
-            )
-            for doc in documents
-        ]
+        messages.insert_one({
+            "user_id": user["email"],   
+            "group_id": request.group_id,
+            "chat_id": request.chat_id,
+            "role": "assistant",
+            "content": answer,
+            "created_at": datetime.utcnow(),
+        })
 
-        return QueryResponse(
-            answer=answer,
-            sources=sources,
-        )
+        return {
+            "answer": answer,
+            "sources": [
+                {
+                    "id": str(doc.get("id")),
+                    "score": float(doc.get("score", 0)),
+                    "content": doc.get("content"),
+                }
+                for doc in documents
+            ]
+        }
 
     except Exception as e:
-        import traceback
-        print("\n===== RAG QUERY ERROR =====")
-        traceback.print_exc()
-        print("===== END ERROR =====\n")
-
         raise HTTPException(
             status_code=500,
-            detail=str(e)
+            detail=f"RAG query failed: {str(e)}"
         )
