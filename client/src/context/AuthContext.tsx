@@ -1,36 +1,30 @@
 import { createContext, useContext, useState } from "react"
 
-type User = {
-  email: string
-}
-
 type AuthContextType = {
-  user: User | null
-  login: (email: string) => void
+  token: string | null
+  login: (token: string) => void
   logout: () => void
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem("nexus_user")
-    return saved ? JSON.parse(saved) : null
+  const [token, setToken] = useState<string | null>(() => {
+    return localStorage.getItem("nexus_token")
   })
 
-  const login = (email: string) => {
-    const user = { email }
-    setUser(user)
-    localStorage.setItem("nexus_user", JSON.stringify(user))
+  const login = (token: string) => {
+    setToken(token)
+    localStorage.setItem("nexus_token", token)
   }
 
   const logout = () => {
-    setUser(null)
-    localStorage.removeItem("nexus_user")
+    setToken(null)
+    localStorage.removeItem("nexus_token")
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ token, login, logout }}>
       {children}
     </AuthContext.Provider>
   )

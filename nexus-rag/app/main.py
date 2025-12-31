@@ -1,8 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 from app.auth.router import router as auth_router
-
-
+from app.api.history import router as history_router
 from fastapi import FastAPI
 from app.api.ingest import router as ingest_router
 from app.api.query import router as query_router
@@ -31,6 +30,7 @@ app.include_router(query_router, prefix="/api", tags=["Query"])
 app.include_router(ingest_router, prefix="/api", tags=["Ingest"])
 app.include_router(auth_router)
 app.include_router(messages_router)
+app.include_router(history_router)
 
 
 @app.get("/")

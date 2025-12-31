@@ -1,8 +1,7 @@
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
-import { useAuth } from "../context/AuthContext.tsx"
+import { useNavigate, Link } from "react-router-dom"
+import { useAuth } from "../context/AuthContext"
 import AuthLayout from "../components/AuthCard"
-import { Link } from "react-router-dom"
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
@@ -10,8 +9,10 @@ function isValidEmail(email: string) {
 
 export default function Login() {
   const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  
   const { login } = useAuth()
   const navigate = useNavigate()
 
@@ -20,23 +21,65 @@ export default function Login() {
       setError("Please enter a valid email address")
       return
     }
+    if (!password) {
+      setError("Please enter your password")
+      return
+    }
 
     setError("")
     setLoading(true)
 
-    // simulate network delay
-    setTimeout(() => {
-      login(email)
+    try {
+      // 2. Real API Call
+      const res = await fetch("http://localhost:8000/auth/login", {
+        method: "POST",
+        headers: { 
+            "Content-Type": "application/json" 
+        },
+        body: JSON.stringify({ email, password }),
+      })
+
+      if (!res.ok) {
+        const errData = await res.json()
+        throw new Error(errData.detail || "Invalid credentials")
+      }
+
+      const data = await res.json()
+
+      login(data.access_token)
+
       navigate("/chat")
-    }, 800)
+    } catch (err: any) {
+      console.error(err)
+      setError(err.message || "Login failed. Please try again.")
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
     <AuthLayout title="Login" subtitle="Welcome back">
       <input
+        type="email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        placeholder="Your email address"
+        placeholder="Email address"
+        className="
+          mb-3 w-full rounded-lg
+          bg-nexus-input text-nexus-text
+          border border-nexus-border
+          px-4 py-3 text-sm
+          placeholder:text-nexus-muted
+          outline-none
+          focus:border-nexus-primary
+        "
+      />
+
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Password"
         className="
           mb-3 w-full rounded-lg
           bg-nexus-input text-nexus-text
@@ -54,15 +97,17 @@ export default function Login() {
 
       <button
         onClick={handleLogin}
-        disabled={loading || !email}
+        disabled={loading || !email || !password}
         className="
           w-full rounded-lg bg-nexus-primary py-3 font-medium
           hover:opacity-90 transition
           disabled:opacity-50
+          disabled:cursor-not-allowed
         "
       >
-        {loading ? "Signing in…" : "Continue"}
+        {loading ? "Signing in…" : "Login"}
       </button>
+
       <p className="mt-6 text-center text-sm text-nexus-muted">
         Don’t have an account?{" "}
         <Link
@@ -72,7 +117,6 @@ export default function Login() {
           Sign up
         </Link>
       </p>
-
     </AuthLayout>
   )
 }
