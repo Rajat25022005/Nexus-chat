@@ -7,7 +7,6 @@ import { useWorkspace } from "../hooks/useWorkspace"
 export default function ChatLayout() {
   const {
     groups,
-    activeGroup,
     activeChat,
     activeGroupId,
     activeChatId,

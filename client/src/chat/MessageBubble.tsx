@@ -1,10 +1,13 @@
-import type { Message } from "./ChatLayout"
 import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { useState } from 'react'
 
-// --- Helper Component for the Copy Button ---
+export interface Message {
+  role: string
+  content: string
+}
+
 const CodeBlockHeader = ({ language, code }: { language: string, code: string }) => {
   const [isCopied, setIsCopied] = useState(false)
 
@@ -12,7 +15,7 @@ const CodeBlockHeader = ({ language, code }: { language: string, code: string })
     if (!code) return
     navigator.clipboard.writeText(code)
     setIsCopied(true)
-    setTimeout(() => setIsCopied(false), 2000) // Reset text after 2 seconds
+    setTimeout(() => setIsCopied(false), 2000)
   }
 
   return (
@@ -32,8 +35,6 @@ const CodeBlockHeader = ({ language, code }: { language: string, code: string })
     </div>
   )
 }
-
-// --- Main Message Bubble Component ---
 export default function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === "user"
 
@@ -50,21 +51,19 @@ export default function MessageBubble({ message }: { message: Message }) {
         `}
       >
         {isUser ? (
-          // User messages are simple text
           <div className="whitespace-pre-wrap">{message.content}</div>
         ) : (
-          // AI messages get full Markdown + Code Highlighting treatment
           <div className="markdown-container px-4 py-2">
             <ReactMarkdown
               components={{
                 code({ node, inline, className, children, ...props }: any) {
                   const match = /language-(\w+)/.exec(className || '')
-                  const codeContent = String(children).replace(/\n$/, '') // Get raw code for copying
+                  const codeContent = String(children).replace(/\n$/, '') 
 
                   return !inline && match ? (
-                    // BLOCK CODE (```python ...)
+                    
                     <div className="my-3 rounded-md overflow-hidden border border-white/10">
-                      {/* Use the new Header Component with Copy Logic */}
+                
                       <CodeBlockHeader language={match[1]} code={codeContent} />
                       
                       <SyntaxHighlighter
@@ -78,7 +77,7 @@ export default function MessageBubble({ message }: { message: Message }) {
                       </SyntaxHighlighter>
                     </div>
                   ) : (
-                    // INLINE CODE (`variable`)
+                 
                     <code 
                       className="bg-black/30 text-red-400 rounded px-1.5 py-0.5 font-mono text-xs" 
                       {...props}

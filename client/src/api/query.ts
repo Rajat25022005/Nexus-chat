@@ -5,8 +5,9 @@ type ChatMessage = {
 
 
 export function getAuthToken() {
-  return localStorage.getItem("token")
+  return localStorage.getItem("nexus_token")
 }
+
 
 export async function queryRAG(params: {
   query: string
@@ -20,7 +21,7 @@ export async function queryRAG(params: {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`, // ✅ Secure Header
+      "Authorization": `Bearer ${token}`,
     },
     body: JSON.stringify({
       query: params.query,
