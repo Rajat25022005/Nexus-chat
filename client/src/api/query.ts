@@ -3,14 +3,6 @@ type ChatMessage = {
   content: string
 }
 
-type QueryResponse = {
-  answer: string
-  sources?: {
-    id: string
-    score: number
-    content?: string
-  }[]
-}
 
 export function getAuthToken() {
   return localStorage.getItem("token")
