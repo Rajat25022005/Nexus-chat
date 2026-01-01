@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Env files
+.env
+.env.*
+
+# Git
+.git
+.gitignore
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Notebooks / data (if any)
+*.ipynb
+data/
+models/
+
+# Docker
+Dockerfile
+.dockerignore
