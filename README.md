@@ -2,7 +2,6 @@
 
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
-![Azure](https://img.shields.io/badge/deployed%20on-Azure-0078D4?style=flat-square&logo=microsoft-azure&logoColor=white)
 
 > **An Agentic Collaboration Platform featuring Real-time Messaging and Context-Aware AI.**
 
