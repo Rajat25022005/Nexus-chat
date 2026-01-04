@@ -2,7 +2,6 @@ from typing import List
 from app.core.config import EMBEDDING_MODEL
 from sentence_transformers import SentenceTransformer
 
-# Load once (important for performance)
 _model = SentenceTransformer(EMBEDDING_MODEL)
 
 
@@ -15,7 +14,6 @@ def embed_text(text: str) -> List[float]:
     """
     embedding = _model.encode(text, normalize_embeddings=True)
 
-    # Safety check (DO NOT REMOVE)
     if len(embedding) != 384:
         raise ValueError(
             f"Embedding dimension mismatch: expected 384, got {len(embedding)}"
