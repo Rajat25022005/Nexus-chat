@@ -4,8 +4,6 @@ from typing import List, Optional
 from app.auth.dependencies import get_current_user
 from app.core.mongo import get_message_collection
 from datetime import datetime
-
-
 from app.rag.retriever import retrieve_context
 from app.generator.prompt import build_prompt
 from app.generator.service import generate_answer
