@@ -7,7 +7,7 @@ from app.api.ingest import router as ingest_router
 from app.api.query import router as query_router
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.messages import router as messages_router
-
+import uvicorn
 
 app = FastAPI(
     title="Nexus RAG Service",
@@ -47,9 +47,5 @@ def debug_routes():
 import os
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=int(os.environ.get("PORT", 8080)),
-    )
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
