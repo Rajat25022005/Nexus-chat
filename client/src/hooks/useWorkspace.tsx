@@ -88,7 +88,7 @@ export function useWorkspace() {
   const sendMessage = async (text: string) => {
     if (!text.trim()) return
 
-    const token = localStorage.getItem("token")
+    const token = localStorage.getItem("nexus_token")
     if (!token) {
       alert("Please login to send messages")
       return
