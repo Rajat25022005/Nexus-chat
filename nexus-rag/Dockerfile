@@ -18,4 +18,4 @@ EXPOSE 8080
 
 # 7. Run the app
 # We use "main:app" assuming main.py is in the same folder as Dockerfile
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
