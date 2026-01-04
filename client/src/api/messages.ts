@@ -10,7 +10,7 @@ export async function fetchMessages(
   token: string
 ): Promise<Message[]> {
   const res = await fetch(
-    `http://127.0.0.1:8000/api/messages/${groupId}/${chatId}`,
+    `https://nexus-backend-453285339762.europe-west1.run.app/api/messages/${groupId}/${chatId}`,
     {
       headers: {
         Authorization: `Bearer ${token}`,

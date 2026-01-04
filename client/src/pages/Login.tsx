@@ -30,8 +30,7 @@ export default function Login() {
     setLoading(true)
 
     try {
-      // 2. Real API Call
-      const res = await fetch("http://localhost:8000/auth/login", {
+      const res = await fetch("https://nexus-backend-453285339762.europe-west1.run.app/auth/login", {
         method: "POST",
         headers: { 
             "Content-Type": "application/json" 

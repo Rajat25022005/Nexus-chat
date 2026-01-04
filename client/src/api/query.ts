@@ -17,7 +17,7 @@ export async function queryRAG(params: {
 }) {
   const token = getAuthToken()
   
-  const res = await fetch("http://localhost:8000/api/query", {
+  const res = await fetch("https://nexus-backend-453285339762.europe-west1.run.app/api/query", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

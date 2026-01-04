@@ -32,7 +32,7 @@ export default function Signup() {
     setLoading(true)
 
     try {
-      const res = await fetch("http://localhost:8000/auth/signup", {
+      const res = await fetch("https://nexus-backend-453285339762.europe-west1.run.app/auth/signup", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
