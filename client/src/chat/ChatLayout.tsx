@@ -13,7 +13,11 @@ export default function ChatLayout() {
     setActiveGroupId,
     setActiveChatId,
     isTyping,
+    typingUsers,
+    isConnected,
     sendMessage,
+    startTyping,
+    stopTyping,
     createGroup,
     createChat,
   } = useWorkspace()
@@ -31,9 +35,34 @@ export default function ChatLayout() {
       />
 
       <div className="flex flex-1 flex-col">
-        <ChatHeader title={activeChat.title} />
-        <MessageList messages={activeChat.messages} isTyping={isTyping} />
-        <MessageInput onSend={sendMessage} disabled={isTyping} />
+        {/* Header with connection status */}
+        <div className="flex items-center justify-between border-b border-nexus-border bg-nexus-header px-6 py-4">
+          <ChatHeader title={activeChat.title} />
+          
+          <div className="flex items-center gap-2">
+            <div
+              className={`h-2 w-2 rounded-full ${
+                isConnected ? "bg-green-500" : "bg-red-500"
+              }`}
+            />
+            <span className="text-xs text-nexus-muted">
+              {isConnected ? "Connected" : "Disconnected"}
+            </span>
+          </div>
+        </div>
+
+        <MessageList
+          messages={activeChat.messages}
+          isTyping={isTyping}
+          typingUsers={typingUsers}
+        />
+
+        <MessageInput
+          onSend={sendMessage}
+          disabled={isTyping || !isConnected}
+          onTypingStart={startTyping}
+          onTypingStop={stopTyping}
+        />
       </div>
     </div>
   )

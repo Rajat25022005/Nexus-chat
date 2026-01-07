@@ -5,9 +5,14 @@ import type { Message } from "../hooks/useWorkspace"
 type Props = {
   messages: Message[]
   isTyping: boolean
+  typingUsers?: string[]
 }
 
-export default function MessageList({ messages, isTyping }: Props) {
+export default function MessageList({
+  messages,
+  isTyping,
+  typingUsers = [],
+}: Props) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -28,13 +33,28 @@ export default function MessageList({ messages, isTyping }: Props) {
         ))}
 
         {isTyping && (
-          <div className="flex items-center gap-2 text-sm text-nexus-muted">
-            <span className="animate-pulse">●</span>
-            <span className="animate-pulse delay-150">●</span>
-            <span className="animate-pulse delay-300">●</span>
+          <div className="flex items-start gap-3">
+            <div className="flex items-center gap-2 rounded-xl bg-nexus-card px-4 py-3 text-sm text-nexus-muted">
+              {typingUsers.length > 0 ? (
+                <>
+                  <span className="font-medium">
+                    {typingUsers.join(", ")}
+                  </span>
+                  <span>
+                    {typingUsers.length === 1 ? "is" : "are"} typing
+                  </span>
+                </>
+              ) : (
+                <span>AI is thinking</span>
+              )}
+              <span className="flex gap-1">
+                <span className="animate-pulse">●</span>
+                <span className="animate-pulse delay-150">●</span>
+                <span className="animate-pulse delay-300">●</span>
+              </span>
+            </div>
           </div>
         )}
-
 
         <div ref={bottomRef} />
       </div>

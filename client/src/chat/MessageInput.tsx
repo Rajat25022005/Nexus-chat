@@ -3,13 +3,47 @@ import { useState } from "react"
 type Props = {
   onSend: (text: string) => void
   disabled?: boolean
+  onTypingStart?: () => void
+  onTypingStop?: () => void
 }
 
-export default function MessageInput({ onSend, disabled }: Props) {
+export default function MessageInput({
+  onSend,
+  disabled,
+  onTypingStart,
+  onTypingStop,
+}: Props) {
   const [text, setText] = useState("")
+  const [isTyping, setIsTyping] = useState(false)
+
+  let typingTimer: ReturnType<typeof setTimeout> | undefined = undefined
+
+  const handleChange = (value: string) => {
+    setText(value)
+
+    // Start typing indicator
+    if (!isTyping && value.length > 0) {
+      setIsTyping(true)
+      onTypingStart?.()
+    }
+
+    // Reset timer
+    clearTimeout(typingTimer)
+
+    // Stop typing after 1s of inactivity
+    typingTimer = setTimeout(() => {
+      setIsTyping(false)
+      onTypingStop?.()
+    }, 1000)
+  }
 
   const handleSend = () => {
     if (!text.trim() || disabled) return
+
+    clearTimeout(typingTimer)
+    setIsTyping(false)
+    onTypingStop?.()
+
     onSend(text)
     setText("")
   }
@@ -21,14 +55,16 @@ export default function MessageInput({ onSend, disabled }: Props) {
           value={text}
           disabled={disabled}
           rows={1}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => handleChange(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault()
               handleSend()
             }
           }}
-          placeholder={disabled ? "Nexus AI is replying…" : "Type a message..."}
+          placeholder={
+            disabled ? "Nexus AI is replying…" : "Type a message..."
+          }
           className="
             flex-1 resize-none rounded-xl px-4 py-3 text-sm
             bg-nexus-card text-nexus-text
@@ -41,12 +77,12 @@ export default function MessageInput({ onSend, disabled }: Props) {
 
         <button
           onClick={handleSend}
-          disabled={disabled}
+          disabled={disabled || !text.trim()}
           className="
             rounded-xl bg-nexus-primary px-5 py-3
             text-sm font-medium text-white
             hover:opacity-90 transition
-            disabled:opacity-50
+            disabled:opacity-50 disabled:cursor-not-allowed
           "
         >
           Send

@@ -30,7 +30,7 @@ export default function Login() {
     setLoading(true)
 
     try {
-      const res = await fetch("https://nexus-backend-453285339762.europe-west1.run.app/auth/login", {
+      const res = await fetch("http://127.0.0.1:8000/auth/login", {
         method: "POST",
         headers: { 
             "Content-Type": "application/json" 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
-import { queryRAG, fetchMessages } from "../api/query"
+import { fetchMessages } from "../api/query"
+import { useSocket } from "./useSocket"
 
 export type Message = {
   id: string
@@ -37,22 +38,62 @@ export function useWorkspace() {
 
   const [activeGroupId, setActiveGroupId] = useState("personal")
   const [activeChatId, setActiveChatId] = useState("general")
-  const [isTyping, setIsTyping] = useState(false)
 
-  const activeGroup =
-    groups.find(g => g.id === activeGroupId) ?? groups[0]
+  const activeGroup = groups.find(g => g.id === activeGroupId) ?? groups[0]
+  const activeChat = activeGroup.chats.find(c => c.id === activeChatId) ?? activeGroup.chats[0]
 
-  const activeChat =
-    activeGroup.chats.find(c => c.id === activeChatId) ??
-    activeGroup.chats[0]
+  // Initialize Socket.IO
+  const {
+    isConnected,
+    typingUsers,
+    sendMessage: socketSendMessage,
+    startTyping,
+    stopTyping,
+    onNewMessage,
+  } = useSocket(activeGroupId, activeChatId)
 
-  // ✅ NEW: Effect to load messages when switching chats
+  // Listen for incoming messages
+  useEffect(() => {
+    const cleanup = onNewMessage((socketMessage) => {
+      setGroups(prev =>
+        prev.map(group =>
+          group.id === activeGroupId
+            ? {
+                ...group,
+                chats: group.chats.map(chat =>
+                  chat.id === activeChatId
+                    ? {
+                        ...chat,
+                        messages: [
+                          ...chat.messages,
+                          {
+                            id: socketMessage.id,
+                            role: socketMessage.role,
+                            content: socketMessage.content,
+                            status: "sent",
+                          },
+                        ],
+                      }
+                    : chat
+                ),
+              }
+            : group
+        )
+      )
+    })
+
+    return cleanup
+  }, [activeGroupId, activeChatId, onNewMessage])
+
+  // Load messages when switching chats
   useEffect(() => {
     async function loadMessages() {
-      // Avoid fetching for non-existent IDs or during initial render if not ready
       if (!activeGroupId || !activeChatId) return
 
       try {
+        const token = localStorage.getItem("nexus_token")
+        if (!token) return
+
         const data = await fetchMessages(activeGroupId, activeChatId)
 
         setGroups(prev =>
@@ -65,7 +106,7 @@ export function useWorkspace() {
                       ? {
                           ...chat,
                           messages: data.map((m: any) => ({
-                            id: m.id || crypto.randomUUID(), // Use backend ID if available
+                            id: m.id || crypto.randomUUID(),
                             role: m.role,
                             content: m.content,
                             status: "sent",
@@ -88,20 +129,15 @@ export function useWorkspace() {
   const sendMessage = async (text: string) => {
     if (!text.trim()) return
 
-    const token = localStorage.getItem("nexus_token")
-    if (!token) {
-      alert("Please login to send messages")
-      return
-    }
+    const messageId = crypto.randomUUID()
 
+    // Add user message locally (optimistic)
     const userMessage: Message = {
-      id: crypto.randomUUID(),
+      id: messageId,
       role: "user",
       content: text,
       status: "sent",
     }
-
-    const aiMessageId = crypto.randomUUID()
 
     setGroups(prev =>
       prev.map(group =>
@@ -112,16 +148,7 @@ export function useWorkspace() {
                 chat.id === activeChatId
                   ? {
                       ...chat,
-                      messages: [
-                        ...chat.messages,
-                        userMessage,
-                        {
-                          id: aiMessageId,
-                          role: "assistant",
-                          content: "",
-                          status: "sending",
-                        },
-                      ],
+                      messages: [...chat.messages, userMessage],
                     }
                   : chat
               ),
@@ -130,82 +157,16 @@ export function useWorkspace() {
       )
     )
 
-    setIsTyping(true)
-
-    try {
-      // Construct history without the 'sending' placeholder
-      const rawHistory = activeChat.messages.filter(m => m.status === 'sent')
-      
-      const history = [
-          ...rawHistory.slice(-5),
-          userMessage
-      ].map(m => ({
-          role: m.role,
-          content: m.content
+    // Send via Socket.IO (will trigger AI response)
+    const history = activeChat.messages
+      .filter(m => m.status === "sent")
+      .slice(-5)
+      .map(m => ({
+        role: m.role,
+        content: m.content,
       }))
 
-      const result = await queryRAG({
-        query: text,
-        groupId: activeGroupId,
-        chatId: activeChatId,
-        history,
-      })
-
-      setGroups(prev =>
-        prev.map(group =>
-          group.id === activeGroupId
-            ? {
-                ...group,
-                chats: group.chats.map(chat =>
-                  chat.id === activeChatId
-                    ? {
-                        ...chat,
-                        messages: chat.messages.map(m =>
-                          m.id === aiMessageId
-                            ? {
-                                ...m,
-                                content: result.answer,
-                                status: "sent",
-                              }
-                            : m
-                        ),
-                      }
-                    : chat
-                ),
-              }
-            : group
-        )
-      )
-    } catch (error) {
-      console.error("RAG Error:", error)
-      setGroups(prev =>
-        prev.map(group =>
-          group.id === activeGroupId
-            ? {
-                ...group,
-                chats: group.chats.map(chat =>
-                  chat.id === activeChatId
-                    ? {
-                        ...chat,
-                        messages: chat.messages.map(m =>
-                          m.id === aiMessageId
-                            ? {
-                                ...m,
-                                content: "⚠️ Failed to get response",
-                                status: "error",
-                              }
-                            : m
-                        ),
-                      }
-                    : chat
-                ),
-              }
-            : group
-        )
-      )
-    } finally {
-      setIsTyping(false)
-    }
+    socketSendMessage(text, messageId, history)
   }
 
   const createGroup = () => {
@@ -263,8 +224,12 @@ export function useWorkspace() {
     activeChatId,
     setActiveGroupId,
     setActiveChatId,
-    isTyping,
+    isTyping: typingUsers.size > 0,
+    typingUsers: Array.from(typingUsers),
+    isConnected,
     sendMessage,
+    startTyping,
+    stopTyping,
     createGroup,
     createChat,
   }
