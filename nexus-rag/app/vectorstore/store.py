@@ -14,20 +14,11 @@ class VectorStore:
         role: str,
         message_id: Optional[str] = None,
     ):
-        """
-        Store a message embedding in MongoDB for RAG.
-        
-        This is Nexus-safe:
-        - Scoped by group_id (workspace)
-        - Scoped by chat_id (thread)
-        """
-
         if not content.strip():
             return
 
         collection = get_vector_collection()
 
-        # 1️⃣ Generate embedding
         embedding = embed_text(content)
 
         document = {
