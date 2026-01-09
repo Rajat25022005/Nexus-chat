@@ -12,7 +12,7 @@ const io = new Server(httpServer, {
   }
 })
 
-const BACKEND_URL = process.env.BACKEND_URL || "https://nexus-backend-453285339762.europe-west1.run.app"
+const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000"
 
 // Track active users in each room
 const rooms = new Map() // roomId -> Set of socket.ids
