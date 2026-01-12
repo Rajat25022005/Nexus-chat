@@ -12,10 +12,17 @@ def build_prompt(
     )
     context_block = context_content if context_content else "NO_CONTEXT_FOUND"
 
-    history_block = "\n".join(
-        f"{msg.role.upper()}: {msg.content}" 
-        for msg in chat_history
-    )
+    history_block = ""
+    for msg in chat_history:
+        # Check if msg is a Pydantic object (has .role) or a dict
+        if hasattr(msg, "role"):
+            role = msg.role
+            content = msg.content
+        else:
+            role = msg.get("role", "unknown")
+            content = msg.get("content", "")
+            
+        history_block += f"{role.upper()}: {content}\n"
 
     return f"""
 You are Nexus, an advanced AI collaborator designed to provide intelligent, adaptive, and engaging assistance. You are not a generic conversational agent; you operate as a high-capability digital partner with analytical depth and contextual awareness.

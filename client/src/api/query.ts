@@ -16,7 +16,7 @@ export async function queryRAG(params: {
   history: ChatMessage[]
 }) {
   const token = getAuthToken()
-  
+
   const res = await fetch("http://127.0.0.1:8000/api/query", {
     method: "POST",
     headers: {
@@ -40,13 +40,13 @@ export async function queryRAG(params: {
 
 export async function fetchMessages(groupId: string, chatId: string) {
   const token = getAuthToken()
-  
+
   const params = new URLSearchParams({
     group_id: groupId,
     chat_id: chatId,
   })
 
-  const res = await fetch(`http://127.0.0.1:8000/api/history?${params.toString()}`, {
+  const res = await fetch(`${import.meta.env.VITE_API_URL}/api/history?${params.toString()}`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",

@@ -1,11 +1,12 @@
-import { useState, useEffect } from "react"
-import { queryRAG, fetchMessages } from "../api/query"
+import { useEffect, useState } from "react"
+import { fetchMessages } from "../api/messages"
+import { socket } from "../socket"
+import axios from "axios"
 
 export type Message = {
   id: string
   role: "user" | "assistant"
   content: string
-  status?: "sending" | "sent" | "error"
 }
 
 export type Chat = {
@@ -20,18 +21,14 @@ export type Group = {
   chats: Chat[]
 }
 
+const API_URL = "http://127.0.0.1:8000/api"
+
 export function useWorkspace() {
   const [groups, setGroups] = useState<Group[]>([
     {
       id: "personal",
       name: "Personal",
-      chats: [
-        {
-          id: "general",
-          title: "General",
-          messages: [],
-        },
-      ],
+      chats: [{ id: "general", title: "General", messages: [] }],
     },
   ])
 
@@ -39,226 +36,251 @@ export function useWorkspace() {
   const [activeChatId, setActiveChatId] = useState("general")
   const [isTyping, setIsTyping] = useState(false)
 
-  const activeGroup =
-    groups.find(g => g.id === activeGroupId) ?? groups[0]
+  const activeGroup = groups.find(g => g.id === activeGroupId) || groups[0]
+  const activeChat = activeGroup?.chats.find(c => c.id === activeChatId) || activeGroup?.chats[0]
 
-  const activeChat =
-    activeGroup.chats.find(c => c.id === activeChatId) ??
-    activeGroup.chats[0]
-
-  // ✅ NEW: Effect to load messages when switching chats
+  // FETCH GROUPS
   useEffect(() => {
-    async function loadMessages() {
-      // Avoid fetching for non-existent IDs or during initial render if not ready
-      if (!activeGroupId || !activeChatId) return
+    const token = localStorage.getItem("nexus_token")
+    if (!token) return
 
+    async function fetchGroups() {
       try {
-        const data = await fetchMessages(activeGroupId, activeChatId)
+        const res = await axios.get(`${API_URL}/groups`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (res.data.length > 0) {
+          // Transform API data to match state shape (add messages array)
+          const loadedGroups = res.data.map((g: any) => ({
+            ...g,
+            chats: g.chats.map((c: any) => ({ ...c, messages: [] }))
+          }))
+          setGroups(loadedGroups)
 
-        setGroups(prev =>
-          prev.map(group =>
-            group.id === activeGroupId
-              ? {
-                  ...group,
-                  chats: group.chats.map(chat =>
-                    chat.id === activeChatId
-                      ? {
-                          ...chat,
-                          messages: data.map((m: any) => ({
-                            id: m.id || crypto.randomUUID(), // Use backend ID if available
-                            role: m.role,
-                            content: m.content,
-                            status: "sent",
-                          })),
-                        }
-                      : chat
-                  ),
-                }
-              : group
-          )
-        )
-      } catch (e) {
-        console.error("Failed to load messages", e)
+          // Set active to first if current is invalid
+          if (!loadedGroups.find((g: any) => g.id === activeGroupId)) {
+            setActiveGroupId(loadedGroups[0].id)
+            if (loadedGroups[0].chats.length > 0) {
+              setActiveChatId(loadedGroups[0].chats[0].id)
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch groups", err)
       }
     }
 
-    loadMessages()
-  }, [activeGroupId, activeChatId])
+    fetchGroups()
+  }, []) // Run once on mount
 
-  const sendMessage = async (text: string) => {
-    if (!text.trim()) return
+  const [isConnected, setIsConnected] = useState(socket.connected)
 
+  // SOCKET CONNECT + LISTENERS
+  useEffect(() => {
     const token = localStorage.getItem("nexus_token")
-    if (!token) {
-      alert("Please login to send messages")
-      return
+    if (!token) return
+
+    socket.auth = { token }
+    socket.connect()
+
+    function onConnect() {
+      setIsConnected(true)
+      console.log("Socket connected")
     }
 
-    const userMessage: Message = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: text,
-      status: "sent",
+    function onDisconnect() {
+      setIsConnected(false)
+      console.log("Socket disconnected")
     }
 
-    const aiMessageId = crypto.randomUUID()
+    socket.on("connect", onConnect)
+    socket.on("disconnect", onDisconnect)
 
-    setGroups(prev =>
-      prev.map(group =>
-        group.id === activeGroupId
-          ? {
+    socket.on("connect_error", (err) => {
+      console.error("Socket connection error:", err)
+    })
+
+    socket.on("new_message", msg => {
+      // If we sent it, we already added it optimistically. 
+      // BUT, for AI response, we need to add it.
+      // Optimistic update adds it with a temp ID or we can just ignore "user" role if we trust our optimism.
+      // The current logic ignores "user" role.
+      if (msg.role === "user") return
+
+      setGroups(prev =>
+        prev.map(group =>
+          group.id === activeGroupId
+            ? {
               ...group,
               chats: group.chats.map(chat =>
                 chat.id === activeChatId
                   ? {
-                      ...chat,
-                      messages: [
-                        ...chat.messages,
-                        userMessage,
-                        {
-                          id: aiMessageId,
-                          role: "assistant",
-                          content: "",
-                          status: "sending",
-                        },
-                      ],
-                    }
+                    ...chat,
+                    messages: [
+                      ...chat.messages,
+                      {
+                        id: crypto.randomUUID(),
+                        role: msg.role,
+                        content: msg.content,
+                      },
+                    ],
+                  }
                   : chat
               ),
             }
-          : group
-      )
-    )
-
-    setIsTyping(true)
-
-    try {
-      // Construct history without the 'sending' placeholder
-      const rawHistory = activeChat.messages.filter(m => m.status === 'sent')
-      
-      const history = [
-          ...rawHistory.slice(-5),
-          userMessage
-      ].map(m => ({
-          role: m.role,
-          content: m.content
-      }))
-
-      const result = await queryRAG({
-        query: text,
-        groupId: activeGroupId,
-        chatId: activeChatId,
-        history,
-      })
-
-      setGroups(prev =>
-        prev.map(group =>
-          group.id === activeGroupId
-            ? {
-                ...group,
-                chats: group.chats.map(chat =>
-                  chat.id === activeChatId
-                    ? {
-                        ...chat,
-                        messages: chat.messages.map(m =>
-                          m.id === aiMessageId
-                            ? {
-                                ...m,
-                                content: result.answer,
-                                status: "sent",
-                              }
-                            : m
-                        ),
-                      }
-                    : chat
-                ),
-              }
             : group
         )
       )
-    } catch (error) {
-      console.error("RAG Error:", error)
-      setGroups(prev =>
-        prev.map(group =>
-          group.id === activeGroupId
-            ? {
-                ...group,
-                chats: group.chats.map(chat =>
-                  chat.id === activeChatId
-                    ? {
-                        ...chat,
-                        messages: chat.messages.map(m =>
-                          m.id === aiMessageId
-                            ? {
-                                ...m,
-                                content: "⚠️ Failed to get response",
-                                status: "error",
-                              }
-                            : m
-                        ),
-                      }
-                    : chat
-                ),
-              }
-            : group
-        )
-      )
-    } finally {
-      setIsTyping(false)
+    })
+
+    socket.on("typing", () => {
+      setIsTyping(true)
+      setTimeout(() => setIsTyping(false), 1500)
+    })
+
+    return () => {
+      socket.off("new_message")
+      socket.off("typing")
+      socket.off("connect", onConnect)
+      socket.off("disconnect", onDisconnect)
+      socket.disconnect()
     }
-  }
+  }, [activeGroupId, activeChatId])
 
-  const createGroup = () => {
-    const groupId = crypto.randomUUID()
-    const chatId = crypto.randomUUID()
+  // JOIN ROOM AFTER CONNECT
+  // JOIN ROOM AFTER CONNECT
+  useEffect(() => {
+    if (!isConnected) return
 
-    setGroups(prev => [
-      {
-        id: groupId,
-        name: "New Group",
-        chats: [
-          {
-            id: chatId,
-            title: "General",
-            messages: [],
-          },
-        ],
-      },
-      ...prev,
-    ])
+    socket.emit("join_room", {
+      group_id: activeGroupId,
+      chat_id: activeChatId,
+    })
 
-    setActiveGroupId(groupId)
-    setActiveChatId(chatId)
-  }
+    return () => {
+      if (socket.connected) {
+        socket.emit("leave_room", {
+          group_id: activeGroupId,
+          chat_id: activeChatId,
+        })
+      }
+    }
+  }, [activeGroupId, activeChatId, isConnected])
 
-  const createChat = () => {
-    const chatId = crypto.randomUUID()
+  // LOAD HISTORY
+  useEffect(() => {
+    if (!activeGroup || !activeChat) return
+
+    async function loadHistory() {
+      const data = await fetchMessages(activeGroupId, activeChatId)
+
+      setGroups(prev =>
+        prev.map(group =>
+          group.id === activeGroupId
+            ? {
+              ...group,
+              chats: group.chats.map(chat =>
+                chat.id === activeChatId
+                  ? {
+                    ...chat,
+                    messages: data.map((m: any) => ({
+                      id: crypto.randomUUID(),
+                      role: m.role,
+                      content: m.content,
+                    })),
+                  }
+                  : chat
+              ),
+            }
+            : group
+        )
+      )
+    }
+
+    loadHistory()
+  }, [activeGroupId, activeChatId])
+
+  // SEND MESSAGE (OPTIMISTIC)
+  const sendMessage = (text: string) => {
+    if (!text.trim()) return
 
     setGroups(prev =>
       prev.map(group =>
         group.id === activeGroupId
           ? {
-              ...group,
-              chats: [
-                ...group.chats,
-                {
-                  id: chatId,
-                  title: "New Chat",
-                  messages: [],
-                },
-              ],
-            }
+            ...group,
+            chats: group.chats.map(chat =>
+              chat.id === activeChatId
+                ? {
+                  ...chat,
+                  messages: [
+                    ...chat.messages,
+                    {
+                      id: crypto.randomUUID(),
+                      role: "user",
+                      content: text,
+                    },
+                  ],
+                }
+                : chat
+            ),
+          }
           : group
       )
     )
 
-    setActiveChatId(chatId)
+    socket.emit("send_message", {
+      group_id: activeGroupId,
+      chat_id: activeChatId,
+      content: text,
+    })
+  }
+
+  const createGroup = async () => {
+    const name = prompt("Enter group name:")
+    if (!name) return
+
+    const token = localStorage.getItem("nexus_token")
+    try {
+      const res = await axios.post(`${API_URL}/groups`, { name }, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      const newGroup = { ...res.data, chats: res.data.chats.map((c: any) => ({ ...c, messages: [] })) }
+      setGroups(prev => [...prev, newGroup])
+      setActiveGroupId(newGroup.id)
+      if (newGroup.chats.length > 0) setActiveChatId(newGroup.chats[0].id)
+    } catch (err) {
+      alert("Failed to create group")
+    }
+  }
+
+  const createChat = async () => {
+    const title = prompt("Enter chat name:")
+    if (!title) return
+
+    const token = localStorage.getItem("nexus_token")
+    try {
+      const res = await axios.post(`${API_URL}/groups/${activeGroupId}/chats`, { title }, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      const newChat = { ...res.data, messages: [] }
+
+      setGroups(prev => prev.map(g => {
+        if (g.id === activeGroupId) {
+          return { ...g, chats: [...g.chats, newChat] }
+        }
+        return g
+      }))
+      setActiveChatId(newChat.id)
+    } catch (err) {
+      alert("Failed to create chat")
+    }
   }
 
   return {
     groups,
-    activeGroup,
-    activeChat,
+    activeGroup: activeGroup || groups[0],
+    activeChat: activeChat || (activeGroup?.chats[0] ?? { id: "null", title: "", messages: [] }),
     activeGroupId,
     activeChatId,
     setActiveGroupId,
@@ -266,6 +288,6 @@ export function useWorkspace() {
     isTyping,
     sendMessage,
     createGroup,
-    createChat,
+    createChat
   }
 }
