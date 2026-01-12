@@ -2,7 +2,7 @@ export async function fetchMessages(groupId: string, chatId: string) {
   const token = localStorage.getItem("nexus_token")
 
   const res = await fetch(
-    `https://nexus-backend-453285339762.europe-west1.run.app/api/messages/${groupId}/${chatId}`,
+    `http://127.0.0.1:8000/api/messages/${groupId}/${chatId}`,
     {
       headers: {
         Authorization: `Bearer ${token}`,

@@ -17,7 +17,7 @@ export async function queryRAG(params: {
 }) {
   const token = getAuthToken()
 
-  const res = await fetch(`https://nexus-backend-453285339762.europe-west1.run.app/api/query`, {
+  const res = await fetch(`http://127.0.0.1:8000/api/query`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -46,7 +46,7 @@ export async function fetchMessages(groupId: string, chatId: string) {
     chat_id: chatId,
   })
 
-  const res = await fetch(`${import.meta.env.VITE_API_URL}/api/history?${params.toString()}`, {
+  const res = await fetch(`http://127.0.0.1:8000/api/history?${params.toString()}`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",

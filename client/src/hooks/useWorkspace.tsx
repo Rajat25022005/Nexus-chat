@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { fetchMessages } from "../api/messages"
 import { socket } from "../socket"
 import axios from "axios"
+import { API_URL } from "../api/config"
 
 export type Message = {
   id: string
@@ -21,7 +22,7 @@ export type Group = {
   chats: Chat[]
 }
 
-const API_URL = "https://nexus-backend-453285339762.europe-west1.run.app/api"
+
 
 export function useWorkspace() {
   const [groups, setGroups] = useState<Group[]>([
@@ -51,14 +52,14 @@ export function useWorkspace() {
         })
         if (res.data.length > 0) {
           // Transform API data to match state shape (add messages array)
-          const loadedGroups = res.data.map((g: any) => ({
+          const loadedGroups = res.data.map((g: Group) => ({
             ...g,
-            chats: g.chats.map((c: any) => ({ ...c, messages: [] }))
+            chats: g.chats.map((c: Chat) => ({ ...c, messages: [] }))
           }))
           setGroups(loadedGroups)
 
           // Set active to first if current is invalid
-          if (!loadedGroups.find((g: any) => g.id === activeGroupId)) {
+          if (!loadedGroups.find((g: Group) => g.id === activeGroupId)) {
             setActiveGroupId(loadedGroups[0].id)
             if (loadedGroups[0].chats.length > 0) {
               setActiveChatId(loadedGroups[0].chats[0].id)
@@ -71,6 +72,7 @@ export function useWorkspace() {
     }
 
     fetchGroups()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // Run once on mount
 
   const [isConnected, setIsConnected] = useState(socket.connected)
@@ -183,7 +185,7 @@ export function useWorkspace() {
                 chat.id === activeChatId
                   ? {
                     ...chat,
-                    messages: data.map((m: any) => ({
+                    messages: data.map((m: Message) => ({
                       id: crypto.randomUUID(),
                       role: m.role,
                       content: m.content,
@@ -198,7 +200,7 @@ export function useWorkspace() {
     }
 
     loadHistory()
-  }, [activeGroupId, activeChatId])
+  }, [activeGroupId, activeChatId, activeGroup, activeChat])
 
   // SEND MESSAGE (OPTIMISTIC)
   const sendMessage = (text: string) => {
@@ -245,11 +247,12 @@ export function useWorkspace() {
       const res = await axios.post(`${API_URL}/groups`, { name }, {
         headers: { Authorization: `Bearer ${token}` }
       })
-      const newGroup = { ...res.data, chats: res.data.chats.map((c: any) => ({ ...c, messages: [] })) }
+      const newGroup = { ...res.data, chats: res.data.chats.map((c: Chat) => ({ ...c, messages: [] })) }
       setGroups(prev => [...prev, newGroup])
       setActiveGroupId(newGroup.id)
       if (newGroup.chats.length > 0) setActiveChatId(newGroup.chats[0].id)
-    } catch (err) {
+    } catch (err: unknown) {
+      console.error("Failed to create group", err)
       alert("Failed to create group")
     }
   }
@@ -272,7 +275,8 @@ export function useWorkspace() {
         return g
       }))
       setActiveChatId(newChat.id)
-    } catch (err) {
+    } catch (err: unknown) {
+      console.error("Failed to create chat", err)
       alert("Failed to create chat")
     }
   }

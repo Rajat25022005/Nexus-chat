@@ -3,6 +3,8 @@ import { useNavigate, Link } from "react-router-dom"
 import { useAuth } from "../context/AuthContext"
 import AuthLayout from "../components/AuthCard"
 
+import { API_URL } from "../api/config"
+
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
@@ -30,7 +32,7 @@ export default function Login() {
     setLoading(true)
 
     try {
-      const res = await fetch("https://nexus-backend-453285339762.europe-west1.run.app/auth/login", {
+      const res = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -48,9 +50,13 @@ export default function Login() {
       login(data.access_token)
 
       navigate("/chat")
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err)
-      setError(err.message || "Login failed. Please try again.")
+      if (err instanceof Error) {
+        setError(err.message || "Login failed. Please try again.")
+      } else {
+        setError("Login failed. Please try again.")
+      }
     } finally {
       setLoading(false)
     }
