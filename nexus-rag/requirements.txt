@@ -15,5 +15,6 @@ pydantic>=2.0.0
 requests
 jinja2
 python-jose[cryptography]
-passlib[bcrypt]
+passlib[bcrypt]==1.7.4
+bcrypt==3.2.2
 email-validator
