@@ -32,6 +32,7 @@ export function useWorkspace() {
     },
   ])
 
+  const [isAiDisabled, setIsAiDisabled] = useState(false)
   const [activeGroupId, setActiveGroupId] = useState("personal")
   const [activeChatId, setActiveChatId] = useState("general")
   const [isTyping, setIsTyping] = useState(false)
@@ -148,7 +149,6 @@ export function useWorkspace() {
   }, [activeGroupId, activeChatId])
 
   // JOIN ROOM AFTER CONNECT
-  // JOIN ROOM AFTER CONNECT
   useEffect(() => {
     if (!isConnected) return
 
@@ -233,6 +233,7 @@ export function useWorkspace() {
       group_id: activeGroupId,
       chat_id: activeChatId,
       content: text,
+      disable_ai: isAiDisabled,
     })
   }
 
@@ -288,6 +289,8 @@ export function useWorkspace() {
     isTyping,
     sendMessage,
     createGroup,
-    createChat
+    createChat,
+    isAiDisabled,
+    setIsAiDisabled
   }
 }

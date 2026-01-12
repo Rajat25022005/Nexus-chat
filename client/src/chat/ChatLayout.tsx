@@ -16,6 +16,8 @@ export default function ChatLayout() {
     sendMessage,
     createGroup,
     createChat,
+    isAiDisabled,
+    setIsAiDisabled,
   } = useWorkspace()
 
   return (
@@ -31,7 +33,11 @@ export default function ChatLayout() {
       />
 
       <div className="flex flex-1 flex-col">
-        <ChatHeader title={activeChat.title} />
+        <ChatHeader
+          title={activeChat.title}
+          isAiDisabled={isAiDisabled}
+          onToggleAi={() => setIsAiDisabled(!isAiDisabled)}
+        />
         <MessageList messages={activeChat.messages} isTyping={isTyping} />
         <MessageInput onSend={sendMessage} disabled={isTyping} />
       </div>
