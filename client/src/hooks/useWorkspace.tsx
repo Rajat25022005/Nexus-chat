@@ -21,7 +21,7 @@ export type Group = {
   chats: Chat[]
 }
 
-const API_URL = "http://127.0.0.1:8000/api"
+const API_URL = "https://nexus-backend-453285339762.europe-west1.run.app/api"
 
 export function useWorkspace() {
   const [groups, setGroups] = useState<Group[]>([
