@@ -1,7 +1,4 @@
-type ChatMessage = {
-  role: "user" | "assistant"
-  content: string
-}
+
 
 
 export function getAuthToken() {
@@ -9,25 +6,29 @@ export function getAuthToken() {
 }
 
 
-export async function queryRAG(params: {
+import { API_URL } from "./config"
+
+export async function queryAI({
+  query,
+  group_id,
+  chat_id,
+}: {
   query: string
-  groupId: string
-  chatId: string
-  history: ChatMessage[]
+  group_id: string
+  chat_id: string
 }) {
   const token = getAuthToken()
 
-  const res = await fetch(`https://nexus-backend-453285339762.europe-west1.run.app/api/query`, {
+  const res = await fetch(`${API_URL}/api/query`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${token}`,
     },
     body: JSON.stringify({
-      query: params.query,
-      group_id: params.groupId,
-      chat_id: params.chatId,
-      history: params.history,
+      query,
+      group_id,
+      chat_id,
     }),
   })
 
@@ -46,7 +47,7 @@ export async function fetchMessages(groupId: string, chatId: string) {
     chat_id: chatId,
   })
 
-  const res = await fetch(`https://nexus-backend-453285339762.europe-west1.run.app/api/history?${params.toString()}`, {
+  const res = await fetch(`${API_URL}/api/history?${params.toString()}`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",

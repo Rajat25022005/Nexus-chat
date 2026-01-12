@@ -1,8 +1,10 @@
+import { API_URL } from "./config"
+
 export async function fetchMessages(groupId: string, chatId: string) {
   const token = localStorage.getItem("nexus_token")
 
   const res = await fetch(
-    `https://nexus-backend-453285339762.europe-west1.run.app/api/messages/${groupId}/${chatId}`,
+    `${API_URL}/api/messages/${groupId}/${chatId}`,
     {
       headers: {
         Authorization: `Bearer ${token}`,
