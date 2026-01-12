@@ -19,14 +19,23 @@ import os
 
 app = FastAPI(title="Nexus RAG Service")
 
+origins = [
+    "https://nexus-backend-453285339762.europe-west1.run.app",
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# ... (routes remain)
 app.include_router(query_router, prefix="/api")
 app.include_router(ingest_router, prefix="/api")
 app.include_router(messages_router)
@@ -55,4 +64,5 @@ def debug_routes():
             print(r.path, None)
 
 if __name__ == "__main__":
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 8080))
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port)

@@ -6,7 +6,13 @@ from app.core.mongo import get_message_collection
 
 sio = socketio.AsyncServer(
     async_mode="asgi",
-    cors_allowed_origins="*",
+    cors_allowed_origins=[
+        "https://nexus-backend-453285339762.europe-west1.run.app",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174"
+    ],
 )
 
 socket_app = socketio.ASGIApp(sio, socketio_path="socket.io")

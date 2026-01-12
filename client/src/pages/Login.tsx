@@ -12,7 +12,7 @@ export default function Login() {
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
-  
+
   const { login } = useAuth()
   const navigate = useNavigate()
 
@@ -30,10 +30,10 @@ export default function Login() {
     setLoading(true)
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/auth/login", {
+      const res = await fetch("https://nexus-backend-453285339762.europe-west1.run.app/auth/login", {
         method: "POST",
-        headers: { 
-            "Content-Type": "application/json" 
+        headers: {
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({ email, password }),
       })
