@@ -4,7 +4,7 @@ from app.core.conversation_analyzer import analyze_conversation
 from app.core.ai_policy import should_ai_interject
 
 
-def maybe_answer(
+async def maybe_answer(
     context: list[str],
     question: str | None,
     mode: str = "observer",
@@ -13,7 +13,7 @@ def maybe_answer(
 
     if mode == "direct":
         prompt = build_prompt(context, question)
-        return generate_answer(prompt)
+        return await generate_answer(prompt)
 
     signals = analyze_conversation(context)
 
@@ -25,4 +25,4 @@ def maybe_answer(
         question="Provide a helpful, neutral intervention."
     )
 
-    return generate_answer(prompt)
+    return await generate_answer(prompt)

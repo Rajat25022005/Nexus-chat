@@ -50,29 +50,14 @@ async def query_rag(
             "created_at": datetime.utcnow(),
         })
 
-        documents = retrieve_context(
-            query=request.query,
+        from app.services.chat_service import process_chat_message
+        answer, documents = await process_chat_message(
+            user_query=request.query,
             group_id=request.group_id,
             chat_id=request.chat_id,
-            top_k=5,
+            user_email=user["email"],
+            history=request.history
         )
-
-        prompt = build_prompt(
-            user_query=request.query,
-            retrieved_docs=documents,
-            chat_history=request.history,
-        )
-
-        answer = generate_answer(prompt)
-
-        messages.insert_one({
-            "user_id": user["email"],   
-            "group_id": request.group_id,
-            "chat_id": request.chat_id,
-            "role": "assistant",
-            "content": answer,
-            "created_at": datetime.utcnow(),
-        })
 
         return {
             "answer": answer,
