@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { fetchMessages } from "../api/messages"
 import { socket } from "../socket"
 import axios from "axios"
@@ -22,8 +22,6 @@ export type Group = {
   chats: Chat[]
 }
 
-
-
 export function useWorkspace() {
   const [groups, setGroups] = useState<Group[]>([
     {
@@ -36,11 +34,26 @@ export function useWorkspace() {
   const [activeGroupId, setActiveGroupId] = useState("personal")
   const [activeChatId, setActiveChatId] = useState("general")
   const [isTyping, setIsTyping] = useState(false)
+  const [isConnected, setIsConnected] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const activeGroup = groups.find(g => g.id === activeGroupId) || groups[0]
-  const activeChat = activeGroup?.chats.find(c => c.id === activeChatId) || activeGroup?.chats[0]
+  // Use refs to avoid stale closures
+  const activeGroupIdRef = useRef(activeGroupId)
+  const activeChatIdRef = useRef(activeChatId)
 
-  // FETCH GROUPS
+  // Update refs when state changes
+  useEffect(() => {
+    activeGroupIdRef.current = activeGroupId
+  }, [activeGroupId])
+
+  useEffect(() => {
+    activeChatIdRef.current = activeChatId
+  }, [activeChatId])
+
+  const activeGroup = groups.find((g) => g.id === activeGroupId) || groups[0]
+  const activeChat = activeGroup?.chats.find((c) => c.id === activeChatId) || activeGroup?.chats[0]
+
+  // FETCH GROUPS - only once on mount
   useEffect(() => {
     const token = localStorage.getItem("nexus_token")
     if (!token) return
@@ -51,15 +64,14 @@ export function useWorkspace() {
           headers: { Authorization: `Bearer ${token}` },
         })
         if (res.data.length > 0) {
-          // Transform API data to match state shape (add messages array)
           const loadedGroups = res.data.map((g: Group) => ({
             ...g,
-            chats: g.chats.map((c: Chat) => ({ ...c, messages: [] }))
+            chats: g.chats.map((c: Chat) => ({ ...c, messages: [] })),
           }))
           setGroups(loadedGroups)
 
           // Set active to first if current is invalid
-          if (!loadedGroups.find((g: Group) => g.id === activeGroupId)) {
+          if (!loadedGroups.find((g: Group) => g.id === activeGroupIdRef.current)) {
             setActiveGroupId(loadedGroups[0].id)
             if (loadedGroups[0].chats.length > 0) {
               setActiveChatId(loadedGroups[0].chats[0].id)
@@ -68,25 +80,25 @@ export function useWorkspace() {
         }
       } catch (err) {
         console.error("Failed to fetch groups", err)
+        setError("Failed to load groups. Please refresh the page.")
       }
     }
 
     fetchGroups()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Run once on mount
+  }, []) // Only run once
 
-  const [isConnected, setIsConnected] = useState(socket.connected)
-
-  // SOCKET CONNECT + LISTENERS
+  // SOCKET CONNECTION - manage lifecycle properly
   useEffect(() => {
     const token = localStorage.getItem("nexus_token")
     if (!token) return
 
+    // Set auth and connect
     socket.auth = { token }
     socket.connect()
 
     function onConnect() {
       setIsConnected(true)
+      setError(null)
       console.log("Socket connected")
     }
 
@@ -95,27 +107,22 @@ export function useWorkspace() {
       console.log("Socket disconnected")
     }
 
-    socket.on("connect", onConnect)
-    socket.on("disconnect", onDisconnect)
-
-    socket.on("connect_error", (err) => {
+    function onConnectError(err: Error) {
       console.error("Socket connection error:", err)
-    })
+      setError("Connection error. Retrying...")
+    }
 
-    socket.on("new_message", msg => {
-      // If we sent it, we already added it optimistically. 
-      // BUT, for AI response, we need to add it.
-      // Optimistic update adds it with a temp ID or we can just ignore "user" role if we trust our optimism.
-      // The current logic ignores "user" role.
+    function onNewMessage(msg: { role: "user" | "assistant"; content: string }) {
+      // Ignore user messages (we add them optimistically)
       if (msg.role === "user") return
 
-      setGroups(prev =>
-        prev.map(group =>
-          group.id === activeGroupId
+      setGroups((prev) =>
+        prev.map((group) =>
+          group.id === activeGroupIdRef.current
             ? {
               ...group,
-              chats: group.chats.map(chat =>
-                chat.id === activeChatId
+              chats: group.chats.map((chat) =>
+                chat.id === activeChatIdRef.current
                   ? {
                     ...chat,
                     messages: [
@@ -133,63 +140,123 @@ export function useWorkspace() {
             : group
         )
       )
-    })
+    }
 
-    socket.on("typing", () => {
+    function onTyping() {
       setIsTyping(true)
-      setTimeout(() => setIsTyping(false), 1500)
-    })
+      setTimeout(() => setIsTyping(false), 2000)
+    }
 
+    function onError(err: { message: string }) {
+      console.error("Socket error:", err)
+      setError(err.message || "An error occurred")
+    }
+
+    // Attach listeners
+    socket.on("connect", onConnect)
+    socket.on("disconnect", onDisconnect)
+    socket.on("connect_error", onConnectError)
+    socket.on("new_message", onNewMessage)
+    socket.on("typing", onTyping)
+    socket.on("error", onError)
+
+    // Cleanup on unmount
     return () => {
-      socket.off("new_message")
-      socket.off("typing")
       socket.off("connect", onConnect)
       socket.off("disconnect", onDisconnect)
+      socket.off("connect_error", onConnectError)
+      socket.off("new_message", onNewMessage)
+      socket.off("typing", onTyping)
+      socket.off("error", onError)
       socket.disconnect()
     }
-  }, [activeGroupId, activeChatId])
+  }, []) // Only run once
 
-  // JOIN ROOM AFTER CONNECT
-  // JOIN ROOM AFTER CONNECT
+  // JOIN/LEAVE ROOM when active chat changes
   useEffect(() => {
     if (!isConnected) return
 
+    const currentGroupId = activeGroupIdRef.current
+    const currentChatId = activeChatIdRef.current
+
     socket.emit("join_room", {
-      group_id: activeGroupId,
-      chat_id: activeChatId,
+      group_id: currentGroupId,
+      chat_id: currentChatId,
     })
 
     return () => {
       if (socket.connected) {
         socket.emit("leave_room", {
-          group_id: activeGroupId,
-          chat_id: activeChatId,
+          group_id: currentGroupId,
+          chat_id: currentChatId,
         })
       }
     }
   }, [activeGroupId, activeChatId, isConnected])
 
-  // LOAD HISTORY
+  // LOAD HISTORY when active chat changes
   useEffect(() => {
     if (!activeGroup || !activeChat) return
 
     async function loadHistory() {
-      const data = await fetchMessages(activeGroupId, activeChatId)
+      try {
+        const data = await fetchMessages(activeGroupId, activeChatId)
 
-      setGroups(prev =>
-        prev.map(group =>
-          group.id === activeGroupId
+        setGroups((prev) =>
+          prev.map((group) =>
+            group.id === activeGroupId
+              ? {
+                ...group,
+                chats: group.chats.map((chat) =>
+                  chat.id === activeChatId
+                    ? {
+                      ...chat,
+                      messages: data.map((m: Message) => ({
+                        id: crypto.randomUUID(),
+                        role: m.role,
+                        content: m.content,
+                      })),
+                    }
+                    : chat
+                ),
+              }
+              : group
+          )
+        )
+      } catch (err) {
+        console.error("Failed to load history", err)
+        setError("Failed to load message history")
+      }
+    }
+
+    loadHistory()
+  }, [activeGroupId, activeChatId, activeGroup, activeChat])
+
+  // SEND MESSAGE with optimistic updates
+  const sendMessage = useCallback(
+    (text: string) => {
+      if (!text.trim()) return
+
+      const tempId = crypto.randomUUID()
+
+      // Optimistic update
+      setGroups((prev) =>
+        prev.map((group) =>
+          group.id === activeGroupIdRef.current
             ? {
               ...group,
-              chats: group.chats.map(chat =>
-                chat.id === activeChatId
+              chats: group.chats.map((chat) =>
+                chat.id === activeChatIdRef.current
                   ? {
                     ...chat,
-                    messages: data.map((m: Message) => ({
-                      id: crypto.randomUUID(),
-                      role: m.role,
-                      content: m.content,
-                    })),
+                    messages: [
+                      ...chat.messages,
+                      {
+                        id: tempId,
+                        role: "user" as const,
+                        content: text,
+                      },
+                    ],
                   }
                   : chat
               ),
@@ -197,89 +264,71 @@ export function useWorkspace() {
             : group
         )
       )
-    }
 
-    loadHistory()
-  }, [activeGroupId, activeChatId, activeGroup, activeChat])
+      // Send to server
+      socket.emit("send_message", {
+        group_id: activeGroupIdRef.current,
+        chat_id: activeChatIdRef.current,
+        content: text,
+      })
+    },
+    []
+  )
 
-  // SEND MESSAGE (OPTIMISTIC)
-  const sendMessage = (text: string) => {
-    if (!text.trim()) return
-
-    setGroups(prev =>
-      prev.map(group =>
-        group.id === activeGroupId
-          ? {
-            ...group,
-            chats: group.chats.map(chat =>
-              chat.id === activeChatId
-                ? {
-                  ...chat,
-                  messages: [
-                    ...chat.messages,
-                    {
-                      id: crypto.randomUUID(),
-                      role: "user",
-                      content: text,
-                    },
-                  ],
-                }
-                : chat
-            ),
-          }
-          : group
-      )
-    )
-
-    socket.emit("send_message", {
-      group_id: activeGroupId,
-      chat_id: activeChatId,
-      content: text,
-    })
-  }
-
-  const createGroup = async () => {
+  const createGroup = useCallback(async () => {
     const name = prompt("Enter group name:")
     if (!name) return
 
     const token = localStorage.getItem("nexus_token")
     try {
-      const res = await axios.post(`${API_URL}/groups`, { name }, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const res = await axios.post(
+        `${API_URL}/groups`,
+        { name },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      )
       const newGroup = { ...res.data, chats: res.data.chats.map((c: Chat) => ({ ...c, messages: [] })) }
-      setGroups(prev => [...prev, newGroup])
+      setGroups((prev) => [...prev, newGroup])
       setActiveGroupId(newGroup.id)
       if (newGroup.chats.length > 0) setActiveChatId(newGroup.chats[0].id)
     } catch (err: unknown) {
       console.error("Failed to create group", err)
-      alert("Failed to create group")
+      setError("Failed to create group")
     }
-  }
+  }, [])
 
-  const createChat = async () => {
+  const createChat = useCallback(async () => {
     const title = prompt("Enter chat name:")
     if (!title) return
 
     const token = localStorage.getItem("nexus_token")
+    const currentGroupId = activeGroupIdRef.current
+
     try {
-      const res = await axios.post(`${API_URL}/groups/${activeGroupId}/chats`, { title }, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const res = await axios.post(
+        `${API_URL}/groups/${currentGroupId}/chats`,
+        { title },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      )
       const newChat = { ...res.data, messages: [] }
 
-      setGroups(prev => prev.map(g => {
-        if (g.id === activeGroupId) {
-          return { ...g, chats: [...g.chats, newChat] }
-        }
-        return g
-      }))
+      setGroups((prev) =>
+        prev.map((g) => {
+          if (g.id === currentGroupId) {
+            return { ...g, chats: [...g.chats, newChat] }
+          }
+          return g
+        })
+      )
       setActiveChatId(newChat.id)
     } catch (err: unknown) {
       console.error("Failed to create chat", err)
-      alert("Failed to create chat")
+      setError("Failed to create chat")
     }
-  }
+  }, [])
 
   return {
     groups,
@@ -290,8 +339,10 @@ export function useWorkspace() {
     setActiveGroupId,
     setActiveChatId,
     isTyping,
+    isConnected,
+    error,
     sendMessage,
     createGroup,
-    createChat
+    createChat,
   }
 }
