@@ -16,8 +16,12 @@ export default function ChatLayout() {
     sendMessage,
     createGroup,
     createChat,
+    joinGroup,
     isAiDisabled,
     setIsAiDisabled,
+    userEmail,
+    deleteGroup,
+    deleteChat,
   } = useWorkspace()
 
   return (
@@ -30,6 +34,10 @@ export default function ChatLayout() {
         onSelectChat={setActiveChatId}
         onNewGroup={createGroup}
         onNewChat={createChat}
+        onJoinGroup={joinGroup}
+        userEmail={userEmail}
+        onDeleteGroup={deleteGroup}
+        onDeleteChat={deleteChat}
       />
 
       <div className="flex flex-1 flex-col">
@@ -38,7 +46,7 @@ export default function ChatLayout() {
           isAiDisabled={isAiDisabled}
           onToggleAi={() => setIsAiDisabled(!isAiDisabled)}
         />
-        <MessageList messages={activeChat.messages} isTyping={isTyping} />
+        <MessageList messages={activeChat.messages} isTyping={isTyping} userEmail={userEmail} />
         <MessageInput onSend={sendMessage} disabled={isTyping} />
       </div>
     </div>

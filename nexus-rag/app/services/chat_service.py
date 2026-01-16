@@ -28,11 +28,39 @@ async def process_chat_message(user_query: str, group_id: str, chat_id: str, use
         )
     )
 
+    # 1.5 Fetch Group Members (Context)
+    from app.core.mongo import get_db
+    import bson
+    db = get_db()
+    
+    group_members = []
+    try:
+        if group_id.startswith("personal_"):
+            # Personal group implies strict 1-on-1 with self/AI
+             # Extract email from personal_email
+             # But usually personal groups don't have multiple members.
+             # Just default to [user_email]? Or parse ID.
+             # Actually, best to just say [user_email] for personal.
+             group_members = [user_email]
+        else:
+            # Regular group
+            oid = bson.ObjectId(group_id)
+            group_doc = db.groups.find_one({"_id": oid})
+            if group_doc:
+                group_members = group_doc.get("members", [])
+                if not group_members and group_doc.get("user_id"):
+                    # Fallback for old groups without members list
+                     group_members = [group_doc["user_id"]]
+    except Exception as e:
+        print(f"Error fetching group members: {e}")
+        group_members = [user_email] # Fallback
+
     # 2. Build Prompt
     prompt = build_prompt(
         user_query=user_query,
         retrieved_docs=documents,
         chat_history=history,
+        group_members=group_members
     )
 
     # 3. Generate Answer

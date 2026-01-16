@@ -43,15 +43,21 @@ def retrieve_context(
         }
     ]
 
-    results = collection.aggregate(pipeline)
+    try:
+        results = collection.aggregate(pipeline)
+        
+        # 3️⃣ Normalize output for generator & frontend
+        documents = []
+        for doc in results:
+            documents.append({
+                "id": str(doc["_id"]),
+                "content": doc.get("content", ""),
+                "score": float(doc.get("score", 0.0)),
+            })
+            
+        return documents
 
-    # 3️⃣ Normalize output for generator & frontend
-    documents = []
-    for doc in results:
-        documents.append({
-            "id": str(doc["_id"]),
-            "content": doc.get("content", ""),
-            "score": float(doc.get("score", 0.0)),
-        })
-
-    return documents
+    except Exception as e:
+        print(f"RAG Retrieval warning (likely local Mongo): {e}")
+        # Return empty context if vector search fails (e.g. local mongo)
+        return []

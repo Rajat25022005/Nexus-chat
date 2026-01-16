@@ -12,6 +12,7 @@ router = APIRouter()
 class ChatMessage(BaseModel):
     role: str  # "user" | "assistant" | "system"
     content: str
+    sender: Optional[str] = None
 
 
 class QueryRequest(BaseModel):

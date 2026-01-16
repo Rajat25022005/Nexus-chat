@@ -30,7 +30,7 @@ export default function Login() {
     setLoading(true)
 
     try {
-      const res = await fetch("https://nexus-backend-453285339762.europe-west1.run.app/auth/login", {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || "https://nexus-backend-453285339762.europe-west1.run.app"}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"

@@ -1,0 +1,10 @@
+
+--- ERROR 2026-01-15 10:50:25.100298 ---
+Traceback (most recent call last):
+  File "/home/vinit/Desktop/nexus chat/nexus/Nexus-chat/nexus-rag/app/socketio.py", line 150, in send_message
+    answer, _ = await process_chat_message(
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vinit/Desktop/nexus chat/nexus/Nexus-chat/nexus-rag/app/services/chat_service.py", line 59, in process_chat_message
+    prompt = build_prompt(
+             ^^^^^^^^^^^^^
+TypeError: build_prompt() got an unexpected keyword argument 'group_members'

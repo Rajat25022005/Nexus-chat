@@ -15,7 +15,7 @@ sio = socketio.AsyncServer(
     ],
 )
 
-socket_app = socketio.ASGIApp(sio, socketio_path="socket.io")
+socket_app = socketio.ASGIApp(sio, socketio_path="")
 
 
 def decode_token(token: str):
@@ -83,12 +83,41 @@ async def send_message(sid, data):
         {
             "role": "user",
             "content": content,
+            "sender": user,  # Add sender identity
         },
         room=room,
     )
 
-    # Trigger AI Response ONLY if not disabled
-    if not data.get("disable_ai"):
+    # Background: Embed and Store in Vector DB
+    # We run this in background so we don't block the ACK to the client
+    import asyncio
+    async def ingest_message(txt, grp, cht, usr):
+        try:
+            from app.embeddings.embedder import embed_text
+            from app.core.mongo import get_vector_collection
+            
+            # Format content with sender info for better retrieval context
+            vector_content = f"User ({usr}): {txt}"
+            embedding = embed_text(vector_content)
+            
+            vec_col = get_vector_collection()
+            vec_col.insert_one({
+                "group_id": grp,
+                "chat_id": cht,
+                "content": vector_content,
+                "embedding": embedding,
+                "created_at": datetime.utcnow(),
+                "metadata": {"user_id": usr, "type": "chat_message"}
+            })
+            print(f"Message vectorized for {usr}")
+        except Exception as e:
+            print(f"Vector Ingest Error: {e}")
+
+    # Fire and forget (or safer: explicit task ref)
+    asyncio.create_task(ingest_message(content, group_id, chat_id, user))
+
+    # Trigger AI Response ONLY if not disabled AND mentioned
+    if not data.get("disable_ai") and "nexus" in content.lower():
         await sio.emit("typing", {}, room=room)
         
         from app.services.chat_service import process_chat_message
@@ -99,18 +128,23 @@ async def send_message(sid, data):
         messages_col = get_message_collection()
         cursor = messages_col.find(
             {
-                "user_id": user,
                 "group_id": group_id,
                 "chat_id": chat_id,
             },
-            {"_id": 0, "role": 1, "content": 1}
-        ).sort("created_at", -1).limit(5)
+            {"_id": 0, "role": 1, "content": 1, "user_id": 1}
+        ).sort("created_at", -1).limit(30)
         
         history_list = []
         # Cursor is latest first, so reverse it
         for msg in cursor:
-            history_list.append({"role": msg["role"], "content": msg["content"]})
+            # Pass user_id as sender if role is user
+            sender = msg.get("user_id") if msg.get("role") == "user" else "Nexus AI"
+            history_list.append({"role": msg["role"], "content": msg["content"], "sender": sender})
         history_list.reverse()
+        print(f"DEBUG HISTORY: {history_list}")
+        with open("debug_nexus_history.txt", "a") as f:
+            f.write(f"\n--- {datetime.utcnow()} ---\n")
+            f.write(str(history_list))
         
         try:
             answer, _ = await process_chat_message(
@@ -133,6 +167,10 @@ async def send_message(sid, data):
             import traceback
             traceback.print_exc()
             print(f"AI Generation failed: {e}")
+            with open("debug_nexus_error.txt", "a") as f:
+                f.write(f"\n--- ERROR {datetime.utcnow()} ---\n")
+                f.write(traceback.format_exc())
+            
             await sio.emit(
                 "new_message",
                 {

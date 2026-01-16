@@ -16,7 +16,6 @@ def get_chat_messages(
 
     cursor = messages_col.find(
         {
-            "user_id": user["email"], 
             "group_id": group_id,
             "chat_id": chat_id,
         }
@@ -28,6 +27,7 @@ def get_chat_messages(
             "role": msg["role"],
             "content": msg["content"],
             "created_at": msg["created_at"],
+            "sender": msg.get("user_id") # Map user_id to sender
         })
 
     return messages
