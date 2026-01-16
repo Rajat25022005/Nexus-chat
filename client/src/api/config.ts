@@ -4,4 +4,4 @@ if (!API_URL_ENV) {
     console.warn("VITE_API_URL not set, using production backend as default")
 }
 
-export const API_URL = API_URL_ENV || "https://nexus-backend-453285339762.europe-west1.run.app"
+export const API_URL = API_URL_ENV || "https://nexus-chat-neon-one.vercel.app"
