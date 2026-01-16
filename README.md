@@ -1,7 +1,7 @@
 # Nexus Workplace AI
 
-Build Status: Passing  
-License: MIT  
+**Build Status**: Passing  
+**License**: MIT  
 
 Nexus is an agentic collaboration platform that integrates real-time communication with context-aware artificial intelligence. It is designed to function as a shared workspace where AI operates as an active collaborator rather than a passive chatbot.
 
@@ -11,126 +11,134 @@ Unlike traditional chat applications, Nexus leverages Retrieval-Augmented Genera
 
 ## Key Features
 
-### Real-Time Collaboration
-- Instant messaging with low-latency bi-directional communication using Socket.io
-- Optimistic UI updates for immediate user feedback
-- Support for multiple workspaces, groups, and chat channels
+### 🚀 Real-Time Collaboration
+- **Instant Messaging**: Low-latency bi-directional communication using Socket.io.
+- **Unified Workspaces**: Support for multiple groups and chat channels.
+- **Personal & Shared Spaces**: 
+    - **Personal Workspace**: A private area for your own notes and AI interactions, isolated from other users.
+    - **Shared Groups**: Collaborative spaces for team discussions.
+- **Thread Management**: Create, view, and **delete** chats and groups (with ownership controls).
 
-### Context-Aware AI Assistant
-- Retrieval-Augmented Generation (RAG) for long-term memory
-- Semantic search across historical conversations and documents
-- Context-aware responses grounded in prior discussions
-- Sub-second inference using Llama-3 via Groq API
+### 🧠 Context-Aware AI Assistant
+- **RAG Engine**: Retrieval-Augmented Generation for long-term memory.
+- **Semantic Search**: Searches across historical conversations to provide relevant answers.
+- **Fast Inference**: Sub-second responses using Llama-3 via Groq API.
+- **Contextual Understanding**: Responses are grounded in prior discussions, reducing hallucinations.
 
-### Multi-Agent Orchestration
-- Distributed AI agents with specialized responsibilities
-- Intent analysis and task delegation
-- Collaborative reasoning and response synthesis
-- Policy-driven and context-aware AI intervention
-
-### Enterprise-Ready Architecture
-- Secure JWT-based authentication
-- Scalable backend architecture
-- Containerized deployment using Docker
-- CI/CD ready design
+### 🛡️ Enterprise-Ready Architecture
+- **Secure Authentication**: JWT-based login and session management.
+- **Scalable Backend**: Built with FastAPI and MongoDB.
+- **Vector Search**: Integrated vector database for semantic memory.
+- **Containerized**: Fully Dockerized for easy deployment.
 
 ---
 
-## Multi-Agent Orchestrator
+## System Architecture
 
-Nexus implements a Multi-Agent Orchestration System that enables multiple specialized AI agents to collaborate on a single task. Instead of relying on a single monolithic AI model, Nexus dynamically assigns responsibilities to agents optimized for specific functions.
-
-### Core Agents
-
-| Agent | Responsibility |
-|------|---------------|
-| Coordinator Agent | Interprets user intent and plans execution |
-| Retriever Agent | Performs semantic search over vector databases |
-| Reasoning Agent | Conducts logical reasoning and synthesis |
-| Action Agent | Executes side effects such as task logging |
-| Validator Agent | Ensures correctness and reduces hallucinations |
-| Observer Agent | Monitors conversations and intervenes when needed |
-
-Agents operate independently but share structured context through the orchestrator.
-
----
-
-### Agent Execution Flow
-
-1. User submits a message or request
-2. Coordinator Agent analyzes intent and creates an execution plan
-3. Retriever Agent fetches relevant historical context
-4. Reasoning Agent synthesizes insights
-5. Validator Agent verifies contextual alignment
-6. Action Agent executes required operations
-7. The final response is delivered to the user in real time
-
----
-
-### Safety and Control
-
-- Policy-driven AI interventions based on conversation signals
-- Strict context grounding to prevent hallucinations
-- Rate-limited AI participation to avoid disruption
-- Human-in-the-loop escalation when confidence is low
-
----
-
-## System Architecture Overview
-
-1. User sends a message via the frontend client
-2. Socket.io broadcasts the message in real time
-3. Message is asynchronously stored in MongoDB
-4. Message is embedded and stored in a vector database
-5. When AI is invoked:
-   - Relevant context is retrieved using vector similarity search
-   - Prompt is constructed using retrieved context and chat history
-   - LLM generates a response
-6. AI response is streamed back to the client
+1.  **Frontend**: React (TypeScript) + Vite -> Handles UI and Socket.io client.
+2.  **Backend**: FastAPI -> Manages API endpoints (`/groups`, `/auth`) and Socket.io events (`new_message`, `typing`).
+3.  **Database**: 
+    - **MongoDB**: Stores Users, Groups, Chats, and Messages.
+    - **Vector Store**: Stores message embeddings for RAG.
+4.  **AI Engine**:
+    - **Retriever**: Fetches relevant context from MongoDB.
+    - **LLM**: Groq API (Llama-3) generates responses based on context + query.
 
 ---
 
 ## Tech Stack
 
 ### Frontend
-- React.js with Vite
-- TypeScript
-- Tailwind CSS
-- Socket.io Client
+- **Framework**: React.js with Vite
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS
+- **Real-time**: Socket.io Client
 
 ### Backend
-- FastAPI (Python)
-- Socket.io (ASGI)
-- JWT Authentication
-- MongoDB
-
-### AI and Data
-- Sentence Transformers for embeddings
-- MongoDB Vector Search
-- Groq API with Llama-3
-- Retrieval-Augmented Generation
-
-### DevOps
-- Docker
-- GitHub Actions
-- Cloud-ready architecture
+- **Framework**: FastAPI (Python)
+- **Real-time**: Socket.io (ASGI)
+- **Database**: MongoDB (Motor async driver)
+- **AI/ML**: Sentence Transformers (Embeddings), Groq API (Inference)
 
 ---
 
 ## Getting Started (Local Setup)
 
 ### Prerequisites
-- Python 3.10 or higher
-- Node.js 18 or higher
-- MongoDB (local or Atlas)
-- Groq API key
+- Python 3.10+
+- Node.js 18+
+- MongoDB (running locally or via Docker)
+- Groq API Key
 
----
-
-### Backend Setup
-
-Clone the repository and navigate to the backend directory.
-
+### 1. Clone the Repository
 ```bash
 git clone https://github.com/Rajat25022005/Nexus-Workplace-AI.git
 cd Nexus-Workplace-AI
+```
+
+### 2. Environment Setup
+Create a `.env` file in `nexus-rag/` with the following:
+```env
+MONGO_URI=mongodb://localhost:27017
+DB_NAME=nexus
+JWT_SECRET_KEY=your_secret_key
+GROQ_API_KEY=your_groq_api_key
+```
+
+### 3. Quick Start
+You can run the entire stack (Backend + Frontend) using the provided helper script:
+
+```bash
+# Make the script executable
+chmod +x start.sh
+
+# Run the application
+./start.sh
+```
+This script will:
+- Set up a Python virtual environment.
+- Install backend dependencies.
+- Install frontend dependencies (`npm install`).
+- Start the FastAPI backend server.
+- Start the React frontend development server.
+
+### 4. Manual Setup (Optional)
+
+**Backend:**
+```bash
+cd nexus-rag
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+**Frontend:**
+```bash
+cd client
+npm install
+npm run dev
+```
+
+---
+
+## Usage Guide
+
+1.  **Register/Login**: Create an account to access the platform.
+2.  **Personal Space**: You land in your "Personal" group. Use this for private brainstorming with the AI.
+3.  **Create Groups**: Use the "+" button to create shared groups for your team.
+4.  **Invites**: Share the Group ID (visible in the sidebar for shared groups) to let others join.
+5.  **Chat with AI**: The AI ("Nexus") monitors conversations and replies when addressed or when it has relevant context. You can also toggle AI processing on/off.
+6.  **Manage Content**: As an owner, you can delete groups or chats you created using the delete icons in the sidebar.
+
+---
+
+## Roadmap
+- [ ] File attachments and parsing
+- [ ] User presence indicators (Online/Offline)
+- [ ] Voice interface
+- [ ] Slack/Discord integration bridges
+
+---
+
+**License**: MIT

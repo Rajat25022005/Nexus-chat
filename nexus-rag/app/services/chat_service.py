@@ -50,37 +50,56 @@ async def process_chat_message(
                 top_k=5,
             )
         )
-        
-        logger.debug(f"Retrieved {len(documents)} context documents")
+    )
 
-        # 2. Build Prompt
-        prompt = build_prompt(
-            user_query=user_query,
-            retrieved_docs=documents,
-            chat_history=history,
-        )
-
-        # 3. Generate Answer
-        answer = await generate_answer(prompt)
-
-        # 4. Store Assistant Message
-        try:
-            messages_col = get_message_collection()
-            messages_col.insert_one({
-                "user_id": user_email,
-                "group_id": group_id,
-                "chat_id": chat_id,
-                "role": "assistant",
-                "content": answer,
-                "created_at": datetime.utcnow(),
-            })
-            logger.debug("Assistant message stored successfully")
-        except Exception as e:
-            logger.error(f"Failed to store assistant message: {e}", exc_info=True)
-            # Don't raise - we still want to return the answer
-
-        return answer, documents
-        
+    # 1.5 Fetch Group Members (Context)
+    from app.core.mongo import get_db
+    import bson
+    db = get_db()
+    
+    group_members = []
+    try:
+        if group_id.startswith("personal_"):
+            # Personal group implies strict 1-on-1 with self/AI
+             # Extract email from personal_email
+             # But usually personal groups don't have multiple members.
+             # Just default to [user_email]? Or parse ID.
+             # Actually, best to just say [user_email] for personal.
+             group_members = [user_email]
+        else:
+            # Regular group
+            oid = bson.ObjectId(group_id)
+            group_doc = db.groups.find_one({"_id": oid})
+            if group_doc:
+                group_members = group_doc.get("members", [])
+                if not group_members and group_doc.get("user_id"):
+                    # Fallback for old groups without members list
+                     group_members = [group_doc["user_id"]]
     except Exception as e:
-        logger.error(f"Error in process_chat_message: {e}", exc_info=True)
-        raise
+        print(f"Error fetching group members: {e}")
+        group_members = [user_email] # Fallback
+
+    # 2. Build Prompt
+    prompt = build_prompt(
+        user_query=user_query,
+        retrieved_docs=documents,
+        chat_history=history,
+        group_members=group_members
+    )
+
+    # 3. Generate Answer
+    answer = await generate_answer(prompt)
+
+    # 4. Store Assistant Message
+    messages_col = get_message_collection()
+    messages_col.insert_one({
+        "user_id": user_email, # OR "system" / "assistant" - but the schema seems to track who "owned" the interaction? 
+                               # In query.py it uses user['email'] for assistant msg too. adapting that.
+        "group_id": group_id,
+        "chat_id": chat_id,
+        "role": "assistant",
+        "content": answer,
+        "created_at": datetime.utcnow(),
+    })
+
+    return answer, documents

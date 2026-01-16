@@ -1,8 +1,7 @@
 import { io, Socket } from "socket.io-client"
 import { API_URL } from "./api/config"
 
-// Create socket instance
-export const socket: Socket = io(API_URL, {
+export const socket = io(import.meta.env.VITE_API_URL || "https://nexus-backend-453285339762.europe-west1.run.app", {
   autoConnect: false,
   transports: ["websocket", "polling"],
   reconnection: true,

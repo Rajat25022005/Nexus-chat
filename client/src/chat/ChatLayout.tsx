@@ -19,33 +19,38 @@ export default function ChatLayout() {
     sendMessage,
     createGroup,
     createChat,
+    joinGroup,
+    isAiDisabled,
+    setIsAiDisabled,
+    userEmail,
+    deleteGroup,
+    deleteChat,
   } = useWorkspace()
 
   return (
-    <ErrorBoundary>
-      <div className="flex h-screen overflow-hidden bg-nexus-bg text-nexus-text">
-        <Sidebar
-          groups={groups}
-          activeGroupId={activeGroupId}
-          activeChatId={activeChatId}
-          onSelectGroup={setActiveGroupId}
-          onSelectChat={setActiveChatId}
-          onNewGroup={createGroup}
-          onNewChat={createChat}
+    <div className="flex h-screen overflow-hidden bg-nexus-bg text-nexus-text">
+      <Sidebar
+        groups={groups}
+        activeGroupId={activeGroupId}
+        activeChatId={activeChatId}
+        onSelectGroup={setActiveGroupId}
+        onSelectChat={setActiveChatId}
+        onNewGroup={createGroup}
+        onNewChat={createChat}
+        onJoinGroup={joinGroup}
+        userEmail={userEmail}
+        onDeleteGroup={deleteGroup}
+        onDeleteChat={deleteChat}
+      />
+
+      <div className="flex flex-1 flex-col">
+        <ChatHeader
+          title={activeChat.title}
+          isAiDisabled={isAiDisabled}
+          onToggleAi={() => setIsAiDisabled(!isAiDisabled)}
         />
-
-        <div className="flex flex-1 flex-col">
-          <ChatHeader title={activeChat.title} isConnected={isConnected} />
-
-          {error && (
-            <div className="bg-red-500/10 px-4 py-2 text-sm text-red-400">
-              {error}
-            </div>
-          )}
-
-          <MessageList messages={activeChat.messages} isTyping={isTyping} />
-          <MessageInput onSend={sendMessage} disabled={isTyping || !isConnected} />
-        </div>
+        <MessageList messages={activeChat.messages} isTyping={isTyping} userEmail={userEmail} />
+        <MessageInput onSend={sendMessage} disabled={isTyping} />
       </div>
     </ErrorBoundary>
   )

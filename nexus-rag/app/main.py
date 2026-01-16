@@ -21,13 +21,17 @@ from app.core.mongo import initialize_database, close_database, check_health
 
 logger = logging.getLogger(__name__)
 
-# Create FastAPI application
-fastapi_app = FastAPI(
-    title="Nexus RAG Service",
-    description="Production-ready chat service with RAG capabilities",
-    version="1.0.0",
-    debug=DEBUG
-)
+app = FastAPI(title="Nexus RAG Service")
+
+origins = [
+    "https://nexus-backend-453285339762.europe-west1.run.app",
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000"
+]
 
 # Configure CORS
 fastapi_app.add_middleware(
@@ -41,13 +45,8 @@ fastapi_app.add_middleware(
 # Add request logging middleware
 fastapi_app.add_middleware(RequestLoggingMiddleware)
 
-# Add rate limiting middleware if enabled
-if RATE_LIMIT_ENABLED:
-    fastapi_app.add_middleware(
-        RateLimitMiddleware,
-        requests_per_minute=RATE_LIMIT_PER_MINUTE
-    )
-    logger.info(f"Rate limiting enabled: {RATE_LIMIT_PER_MINUTE} requests/minute")
+# Socket.IO at /socket.io
+app.mount("/socket.io", socket_app)
 
 # Include routers
 fastapi_app.include_router(auth_router)
@@ -162,12 +161,5 @@ async def general_exception_handler(request: Request, exc: Exception):
 app = socketio.ASGIApp(sio, fastapi_app)
 
 if __name__ == "__main__":
-    import uvicorn
     port = int(os.getenv("PORT", 8000))
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=port,
-        reload=DEBUG,
-        log_level="info"
-    )
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port)
