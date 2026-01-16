@@ -3,6 +3,8 @@ import { useNavigate, Link } from "react-router-dom"
 import { useAuth } from "../context/AuthContext"
 import AuthLayout from "../components/AuthCard"
 
+import { API_URL } from "../api/config"
+
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
@@ -55,9 +57,13 @@ export default function Signup() {
 
       // Redirect to chat
       navigate("/chat")
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err)
-      setError(err.message || "Signup failed")
+      if (err instanceof Error) {
+        setError(err.message || "Signup failed")
+      } else {
+        setError("Signup failed")
+      }
     } finally {
       setLoading(false)
     }

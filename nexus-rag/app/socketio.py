@@ -1,58 +1,96 @@
 import socketio
+import asyncio
+import logging
 from jose import jwt
-from app.core.config import JWT_SECRET, JWT_ALGORITHM
 from datetime import datetime
+
+from app.core.config import JWT_SECRET, JWT_ALGORITHM, ALLOWED_ORIGINS
 from app.core.mongo import get_message_collection
 
+logger = logging.getLogger(__name__)
+
+# Create Socket.IO server with proper CORS configuration
 sio = socketio.AsyncServer(
     async_mode="asgi",
-    cors_allowed_origins=[
-        "https://nexus-backend-453285339762.europe-west1.run.app",
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:5174"
-    ],
+    cors_allowed_origins=ALLOWED_ORIGINS,
+    logger=False,  # Use our own logger
+    engineio_logger=False
 )
 
 socket_app = socketio.ASGIApp(sio, socketio_path="")
 
 
 def decode_token(token: str):
+    """Decode and validate JWT token"""
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         return payload.get("sub")
-    except Exception:
+    except Exception as e:
+        logger.error(f"Token decode error: {e}")
         return None
 
 
 @sio.event
 async def connect(sid, environ, auth):
-    token = auth.get("token") if auth else None
-    user = decode_token(token)
+    """Handle client connection"""
+    try:
+        token = auth.get("token") if auth else None
+        user = decode_token(token)
 
-    if not user:
+        if not user:
+            logger.warning(f"Connection rejected - invalid token from {sid}")
+            return False
+
+        await sio.save_session(sid, {"user": user})
+        logger.info(f"Socket connected: {user} (sid: {sid})")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error in connect handler: {e}", exc_info=True)
         return False
-
-    await sio.save_session(sid, {"user": user})
-    print(f"Socket connected: {user}")
 
 
 @sio.event
 async def disconnect(sid):
-    print(f"Socket disconnected: {sid}")
+    """Handle client disconnection"""
+    try:
+        session = await sio.get_session(sid)
+        user = session.get("user", "unknown")
+        logger.info(f"Socket disconnected: {user} (sid: {sid})")
+    except Exception as e:
+        logger.error(f"Error in disconnect handler: {e}", exc_info=True)
 
 
 @sio.event
 async def join_room(sid, data):
-    room = f"{data['group_id']}:{data['chat_id']}"
-    await sio.enter_room(sid, room)
+    """Handle room join requests"""
+    try:
+        if not data or "group_id" not in data or "chat_id" not in data:
+            logger.warning(f"Invalid join_room data from {sid}: {data}")
+            return
+        
+        room = f"{data['group_id']}:{data['chat_id']}"
+        await sio.enter_room(sid, room)
+        logger.debug(f"Client {sid} joined room: {room}")
+        
+    except Exception as e:
+        logger.error(f"Error in join_room handler: {e}", exc_info=True)
 
 
 @sio.event
 async def leave_room(sid, data):
-    room = f"{data['group_id']}:{data['chat_id']}"
-    await sio.leave_room(sid, room)
+    """Handle room leave requests"""
+    try:
+        if not data or "group_id" not in data or "chat_id" not in data:
+            logger.warning(f"Invalid leave_room data from {sid}: {data}")
+            return
+        
+        room = f"{data['group_id']}:{data['chat_id']}"
+        await sio.leave_room(sid, room)
+        logger.debug(f"Client {sid} left room: {room}")
+        
+    except Exception as e:
+        logger.error(f"Error in leave_room handler: {e}", exc_info=True)
 
 
 @sio.event
@@ -183,5 +221,13 @@ async def send_message(sid, data):
 
 @sio.event
 async def typing(sid, data):
-    room = f"{data['group_id']}:{data['chat_id']}"
-    await sio.emit("typing", {}, room=room, skip_sid=sid)
+    """Handle typing indicators"""
+    try:
+        if not data or "group_id" not in data or "chat_id" not in data:
+            return
+        
+        room = f"{data['group_id']}:{data['chat_id']}"
+        await sio.emit("typing", {}, room=room, skip_sid=sid)
+        
+    except Exception as e:
+        logger.error(f"Error in typing handler: {e}", exc_info=True)

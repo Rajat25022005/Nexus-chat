@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { fetchMessages } from "../api/messages"
 import { socket } from "../socket"
 import axios from "axios"
+import { API_URL } from "../api/config"
 
 export type Message = {
   id: string
@@ -35,8 +36,12 @@ export function useWorkspace() {
   const [isTyping, setIsTyping] = useState(false)
   const [userEmail, setUserEmail] = useState("")
 
-  const activeGroup = groups.find(g => g.id === activeGroupId) || groups[0]
-  const activeChat = activeGroup?.chats.find(c => c.id === activeChatId) || activeGroup?.chats[0]
+  useEffect(() => {
+    activeChatIdRef.current = activeChatId
+  }, [activeChatId])
+
+  const activeGroup = groups.find((g) => g.id === activeGroupId) || groups[0]
+  const activeChat = activeGroup?.chats.find((c) => c.id === activeChatId) || activeGroup?.chats[0]
 
   useEffect(() => {
     const token = localStorage.getItem("nexus_token")
@@ -61,15 +66,14 @@ export function useWorkspace() {
           headers: { Authorization: `Bearer ${token}` },
         })
         if (res.data.length > 0) {
-          // Transform API data to match state shape (add messages array)
-          const loadedGroups = res.data.map((g: any) => ({
+          const loadedGroups = res.data.map((g: Group) => ({
             ...g,
-            chats: g.chats.map((c: any) => ({ ...c, messages: [] }))
+            chats: g.chats.map((c: Chat) => ({ ...c, messages: [] })),
           }))
           setGroups(loadedGroups)
 
           // Set active to first if current is invalid
-          if (!loadedGroups.find((g: any) => g.id === activeGroupId)) {
+          if (!loadedGroups.find((g: Group) => g.id === activeGroupIdRef.current)) {
             setActiveGroupId(loadedGroups[0].id)
             if (loadedGroups[0].chats.length > 0) {
               setActiveChatId(loadedGroups[0].chats[0].id)
@@ -78,11 +82,12 @@ export function useWorkspace() {
         }
       } catch (err) {
         console.error("Failed to fetch groups", err)
+        setError("Failed to load groups. Please refresh the page.")
       }
     }
 
     fetchGroups()
-  }, []) // Run once on mount
+  }, []) // Only run once
 
   const [isConnected, setIsConnected] = useState(socket.connected)
 
@@ -92,11 +97,13 @@ export function useWorkspace() {
     const token = localStorage.getItem("nexus_token")
     if (!token) return
 
+    // Set auth and connect
     socket.auth = { token }
     socket.connect()
 
     function onConnect() {
       setIsConnected(true)
+      setError(null)
       console.log("Socket connected")
     }
 
@@ -109,7 +116,8 @@ export function useWorkspace() {
     socket.on("disconnect", onDisconnect)
     socket.on("connect_error", (err) => {
       console.error("Socket connection error:", err)
-    })
+      setError("Connection error. Retrying...")
+    }
 
     return () => {
       socket.off("connect", onConnect)
@@ -140,13 +148,13 @@ export function useWorkspace() {
       // If I sent it, ignore (optimistic update handles it)
       if (msg.role === "user" && msg.sender === myEmail) return
 
-      setGroups(prev =>
-        prev.map(group =>
-          group.id === activeGroupId
+      setGroups((prev) =>
+        prev.map((group) =>
+          group.id === activeGroupIdRef.current
             ? {
               ...group,
-              chats: group.chats.map(chat =>
-                chat.id === activeChatId
+              chats: group.chats.map((chat) =>
+                chat.id === activeChatIdRef.current
                   ? {
                     ...chat,
                     messages: [
@@ -178,8 +186,8 @@ export function useWorkspace() {
     // Re-join room to ensure we are subscribed to the correct channel
     // (Join logic is idempotent-ish, but let's ensure we are in the room)
     socket.emit("join_room", {
-      group_id: activeGroupId,
-      chat_id: activeChatId,
+      group_id: currentGroupId,
+      chat_id: currentChatId,
     })
 
     return () => {
@@ -199,15 +207,54 @@ export function useWorkspace() {
     if (!activeGroup || !activeChat) return
 
     async function loadHistory() {
-      const data = await fetchMessages(activeGroupId, activeChatId)
+      try {
+        const data = await fetchMessages(activeGroupId, activeChatId)
 
-      setGroups(prev =>
-        prev.map(group =>
-          group.id === activeGroupId
+        setGroups((prev) =>
+          prev.map((group) =>
+            group.id === activeGroupId
+              ? {
+                ...group,
+                chats: group.chats.map((chat) =>
+                  chat.id === activeChatId
+                    ? {
+                      ...chat,
+                      messages: data.map((m: Message) => ({
+                        id: crypto.randomUUID(),
+                        role: m.role,
+                        content: m.content,
+                      })),
+                    }
+                    : chat
+                ),
+              }
+              : group
+          )
+        )
+      } catch (err) {
+        console.error("Failed to load history", err)
+        setError("Failed to load message history")
+      }
+    }
+
+    loadHistory()
+  }, [activeGroupId, activeChatId, activeGroup, activeChat])
+
+  // SEND MESSAGE with optimistic updates
+  const sendMessage = useCallback(
+    (text: string) => {
+      if (!text.trim()) return
+
+      const tempId = crypto.randomUUID()
+
+      // Optimistic update
+      setGroups((prev) =>
+        prev.map((group) =>
+          group.id === activeGroupIdRef.current
             ? {
               ...group,
-              chats: group.chats.map(chat =>
-                chat.id === activeChatId
+              chats: group.chats.map((chat) =>
+                chat.id === activeChatIdRef.current
                   ? {
                     ...chat,
                     messages: data.map((m: any) => ({
@@ -223,7 +270,6 @@ export function useWorkspace() {
             : group
         )
       )
-    }
 
     loadHistory()
   }, [activeGroupId, activeChatId])
@@ -327,32 +373,42 @@ export function useWorkspace() {
       setGroups(prev => [...prev, newGroup])
       setActiveGroupId(newGroup.id)
       if (newGroup.chats.length > 0) setActiveChatId(newGroup.chats[0].id)
-    } catch (err) {
-      alert("Failed to create group")
+    } catch (err: unknown) {
+      console.error("Failed to create group", err)
+      setError("Failed to create group")
     }
-  }
+  }, [])
 
   const createChat = async (title: string) => {
     if (!title) return
 
     const token = localStorage.getItem("nexus_token")
+    const currentGroupId = activeGroupIdRef.current
+
     try {
-      const res = await axios.post(`${API_URL}/groups/${activeGroupId}/chats`, { title }, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const res = await axios.post(
+        `${API_URL}/groups/${currentGroupId}/chats`,
+        { title },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      )
       const newChat = { ...res.data, messages: [] }
 
-      setGroups(prev => prev.map(g => {
-        if (g.id === activeGroupId) {
-          return { ...g, chats: [...g.chats, newChat] }
-        }
-        return g
-      }))
+      setGroups((prev) =>
+        prev.map((g) => {
+          if (g.id === currentGroupId) {
+            return { ...g, chats: [...g.chats, newChat] }
+          }
+          return g
+        })
+      )
       setActiveChatId(newChat.id)
-    } catch (err) {
-      alert("Failed to create chat")
+    } catch (err: unknown) {
+      console.error("Failed to create chat", err)
+      setError("Failed to create chat")
     }
-  }
+  }, [])
 
   const deleteGroup = async (groupId: string) => {
     const token = localStorage.getItem("nexus_token")
@@ -420,6 +476,8 @@ export function useWorkspace() {
     setActiveGroupId,
     setActiveChatId,
     isTyping,
+    isConnected,
+    error,
     sendMessage,
     createGroup,
     createChat,

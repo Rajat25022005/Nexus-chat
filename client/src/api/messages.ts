@@ -1,3 +1,5 @@
+import { API_URL } from "./config"
+
 export async function fetchMessages(groupId: string, chatId: string) {
   const token = localStorage.getItem("nexus_token")
 

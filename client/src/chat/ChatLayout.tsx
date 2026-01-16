@@ -3,6 +3,7 @@ import ChatHeader from "./ChatHeader"
 import MessageList from "./MessageList"
 import MessageInput from "./MessageInput"
 import { useWorkspace } from "../hooks/useWorkspace"
+import { ErrorBoundary } from "../components/ErrorBoundary"
 
 export default function ChatLayout() {
   const {
@@ -13,6 +14,8 @@ export default function ChatLayout() {
     setActiveGroupId,
     setActiveChatId,
     isTyping,
+    isConnected,
+    error,
     sendMessage,
     createGroup,
     createChat,
@@ -49,6 +52,6 @@ export default function ChatLayout() {
         <MessageList messages={activeChat.messages} isTyping={isTyping} userEmail={userEmail} />
         <MessageInput onSend={sendMessage} disabled={isTyping} />
       </div>
-    </div>
+    </ErrorBoundary>
   )
 }

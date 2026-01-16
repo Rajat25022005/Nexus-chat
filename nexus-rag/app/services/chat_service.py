@@ -1,30 +1,54 @@
 from datetime import datetime
+import logging
+import asyncio
+
 from app.core.mongo import get_message_collection
 from app.rag.retriever import retrieve_context
 from app.generator.prompt import build_prompt
 from app.generator.service import generate_answer
 
-async def process_chat_message(user_query: str, group_id: str, chat_id: str, user_email: str, history: list = []):
+logger = logging.getLogger(__name__)
+
+
+async def process_chat_message(
+    user_query: str,
+    group_id: str,
+    chat_id: str,
+    user_email: str,
+    history: list = []
+):
     """
-    Core RAG logic:
-    1. Store user message (if not already stored by the caller, but here we assume we do it if needed, or caller does it.
-       Actually, socketio.py stores it before broadcasting. query.py stores it too.
-       To avoid duplication, let's let this service handle the AI generation part mostly.
-       But query.py uses it for the whole flow.
-       Let's design it to generate the ANSWER and store the ANSWER.
+    Core RAG logic for processing chat messages.
+    
+    1. Retrieve relevant context from vector store
+    2. Build prompt with context and history
+    3. Generate AI response
+    4. Store response in database
+    
+    Args:
+        user_query: The user's input message
+        group_id: Group identifier
+        chat_id: Chat identifier
+        user_email: User's email (from JWT)
+        history: List of recent messages for context
+    
+    Returns:
+        Tuple of (answer, retrieved_documents)
     """
-    
-    # 1. Retrieve Context (Run in thread to avoid blocking loop with embeddings/mongo)
-    import asyncio
-    loop = asyncio.get_running_loop()
-    
-    documents = await loop.run_in_executor(
-        None, 
-        lambda: retrieve_context(
-            query=user_query,
-            group_id=group_id,
-            chat_id=chat_id,
-            top_k=5,
+    try:
+        logger.debug(f"Processing chat message for user: {user_email}")
+        
+        # 1. Retrieve Context (Run in executor to avoid blocking)
+        loop = asyncio.get_running_loop()
+        
+        documents = await loop.run_in_executor(
+            None,
+            lambda: retrieve_context(
+                query=user_query,
+                group_id=group_id,
+                chat_id=chat_id,
+                top_k=5,
+            )
         )
     )
 
