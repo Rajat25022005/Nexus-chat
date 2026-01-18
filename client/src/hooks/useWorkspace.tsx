@@ -25,7 +25,7 @@ export type Group = {
   chats: Chat[]
 }
 
-const API_URL = `${import.meta.env.VITE_API_URL || "https://nexus-backend-453285339762.europe-west1.run.app"}/api`
+const API_URL = `${import.meta.env.VITE_API_URL || "https://nexus-chat-neon-one.vercel.app"}/api`
 
 export function useWorkspace() {
   const [groups, setGroups] = useState<Group[]>([])
