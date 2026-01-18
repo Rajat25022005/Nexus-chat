@@ -11,7 +11,7 @@ Unlike traditional chat applications, Nexus leverages Retrieval-Augmented Genera
 
 ## Key Features
 
-### 🚀 Real-Time Collaboration
+###  Real-Time Collaboration
 - **Instant Messaging**: Low-latency bi-directional communication using Socket.io.
 - **Unified Workspaces**: Support for multiple groups and chat channels.
 - **Personal & Shared Spaces**: 
@@ -19,13 +19,13 @@ Unlike traditional chat applications, Nexus leverages Retrieval-Augmented Genera
     - **Shared Groups**: Collaborative spaces for team discussions.
 - **Thread Management**: Create, view, and **delete** chats and groups (with ownership controls).
 
-### 🧠 Context-Aware AI Assistant
+###  Context-Aware AI Assistant
 - **RAG Engine**: Retrieval-Augmented Generation for long-term memory.
 - **Semantic Search**: Searches across historical conversations to provide relevant answers.
 - **Fast Inference**: Sub-second responses using Llama-3 via Groq API.
 - **Contextual Understanding**: Responses are grounded in prior discussions, reducing hallucinations.
 
-### 🛡️ Enterprise-Ready Architecture
+###  Enterprise-Ready Architecture
 - **Secure Authentication**: JWT-based login and session management.
 - **Scalable Backend**: Built with FastAPI and MongoDB.
 - **Vector Search**: Integrated vector database for semantic memory.
