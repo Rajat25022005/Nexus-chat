@@ -14,8 +14,6 @@ export default function ChatLayout() {
     setActiveGroupId,
     setActiveChatId,
     isTyping,
-    isConnected,
-    error,
     sendMessage,
     createGroup,
     createChat,
@@ -28,29 +26,31 @@ export default function ChatLayout() {
   } = useWorkspace()
 
   return (
-    <div className="flex h-screen overflow-hidden bg-nexus-bg text-nexus-text">
-      <Sidebar
-        groups={groups}
-        activeGroupId={activeGroupId}
-        activeChatId={activeChatId}
-        onSelectGroup={setActiveGroupId}
-        onSelectChat={setActiveChatId}
-        onNewGroup={createGroup}
-        onNewChat={createChat}
-        onJoinGroup={joinGroup}
-        userEmail={userEmail}
-        onDeleteGroup={deleteGroup}
-        onDeleteChat={deleteChat}
-      />
-
-      <div className="flex flex-1 flex-col">
-        <ChatHeader
-          title={activeChat.title}
-          isAiDisabled={isAiDisabled}
-          onToggleAi={() => setIsAiDisabled(!isAiDisabled)}
+    <ErrorBoundary>
+      <div className="flex h-screen overflow-hidden bg-nexus-bg text-nexus-text">
+        <Sidebar
+          groups={groups}
+          activeGroupId={activeGroupId}
+          activeChatId={activeChatId}
+          onSelectGroup={setActiveGroupId}
+          onSelectChat={setActiveChatId}
+          onNewGroup={createGroup}
+          onNewChat={createChat}
+          onJoinGroup={joinGroup}
+          userEmail={userEmail}
+          onDeleteGroup={deleteGroup}
+          onDeleteChat={deleteChat}
         />
-        <MessageList messages={activeChat.messages} isTyping={isTyping} userEmail={userEmail} />
-        <MessageInput onSend={sendMessage} disabled={isTyping} />
+
+        <div className="flex flex-1 flex-col">
+          <ChatHeader
+            title={activeChat.title}
+            isAiDisabled={isAiDisabled}
+            onToggleAi={() => setIsAiDisabled(!isAiDisabled)}
+          />
+          <MessageList messages={activeChat.messages} isTyping={isTyping} userEmail={userEmail} />
+          <MessageInput onSend={sendMessage} disabled={isTyping} />
+        </div>
       </div>
     </ErrorBoundary>
   )

@@ -1,8 +1,8 @@
-import { useEffect, useState, useCallback, useRef } from "react"
+import { useEffect, useState, useRef } from "react"
 import { fetchMessages } from "../api/messages"
 import { socket } from "../socket"
 import axios from "axios"
-import { API_URL } from "../api/config"
+
 
 export type Message = {
   id: string
@@ -25,7 +25,9 @@ export type Group = {
   chats: Chat[]
 }
 
-const API_URL = `${import.meta.env.VITE_API_URL || "https://nexus-chat-neon-one.vercel.app"}/api`
+import { API_URL as BASE_URL } from "../api/config"
+const API_URL = `${BASE_URL}/api`
+
 
 export function useWorkspace() {
   const [groups, setGroups] = useState<Group[]>([])
@@ -35,6 +37,14 @@ export function useWorkspace() {
   const [activeChatId, setActiveChatId] = useState("general")
   const [isTyping, setIsTyping] = useState(false)
   const [userEmail, setUserEmail] = useState("")
+  const [error, setError] = useState<string | null>(null)
+
+  const activeGroupIdRef = useRef(activeGroupId)
+  const activeChatIdRef = useRef(activeChatId)
+
+  useEffect(() => {
+    activeGroupIdRef.current = activeGroupId
+  }, [activeGroupId])
 
   useEffect(() => {
     activeChatIdRef.current = activeChatId
@@ -117,7 +127,7 @@ export function useWorkspace() {
     socket.on("connect_error", (err) => {
       console.error("Socket connection error:", err)
       setError("Connection error. Retrying...")
-    }
+    })
 
     return () => {
       socket.off("connect", onConnect)
@@ -186,8 +196,8 @@ export function useWorkspace() {
     // Re-join room to ensure we are subscribed to the correct channel
     // (Join logic is idempotent-ish, but let's ensure we are in the room)
     socket.emit("join_room", {
-      group_id: currentGroupId,
-      chat_id: currentChatId,
+      group_id: activeGroupId,
+      chat_id: activeChatId,
     })
 
     return () => {
@@ -204,7 +214,7 @@ export function useWorkspace() {
 
   // LOAD HISTORY
   useEffect(() => {
-    if (!activeGroup || !activeChat) return
+    if (!activeGroupId || !activeChatId) return
 
     async function loadHistory() {
       try {
@@ -219,10 +229,11 @@ export function useWorkspace() {
                   chat.id === activeChatId
                     ? {
                       ...chat,
-                      messages: data.map((m: Message) => ({
+                      messages: data.map((m: any) => ({
                         id: crypto.randomUUID(),
                         role: m.role,
                         content: m.content,
+                        sender: m.sender || m.user_id
                       })),
                     }
                     : chat
@@ -238,41 +249,9 @@ export function useWorkspace() {
     }
 
     loadHistory()
-  }, [activeGroupId, activeChatId, activeGroup, activeChat])
-
-  // SEND MESSAGE with optimistic updates
-  const sendMessage = useCallback(
-    (text: string) => {
-      if (!text.trim()) return
-
-      const tempId = crypto.randomUUID()
-
-      // Optimistic update
-      setGroups((prev) =>
-        prev.map((group) =>
-          group.id === activeGroupIdRef.current
-            ? {
-              ...group,
-              chats: group.chats.map((chat) =>
-                chat.id === activeChatIdRef.current
-                  ? {
-                    ...chat,
-                    messages: data.map((m: any) => ({
-                      id: crypto.randomUUID(),
-                      role: m.role,
-                      content: m.content,
-                      sender: m.sender
-                    })),
-                  }
-                  : chat
-              ),
-            }
-            : group
-        )
-      )
-
-    loadHistory()
   }, [activeGroupId, activeChatId])
+
+
 
   // SEND MESSAGE (OPTIMISTIC)
   const sendMessage = (text: string) => {
@@ -377,7 +356,7 @@ export function useWorkspace() {
       console.error("Failed to create group", err)
       setError("Failed to create group")
     }
-  }, [])
+  }
 
   const createChat = async (title: string) => {
     if (!title) return
@@ -408,7 +387,7 @@ export function useWorkspace() {
       console.error("Failed to create chat", err)
       setError("Failed to create chat")
     }
-  }, [])
+  }
 
   const deleteGroup = async (groupId: string) => {
     const token = localStorage.getItem("nexus_token")

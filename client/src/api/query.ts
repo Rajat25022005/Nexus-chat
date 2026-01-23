@@ -19,7 +19,7 @@ export async function queryAI({
 }) {
   const token = getAuthToken()
 
-  const res = await fetch(`${import.meta.env.VITE_API_URL || "https://nexus-chat-neon-one.vercel.app"}/api/query`, {
+  const res = await fetch(`${API_URL}/api/query`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -47,7 +47,7 @@ export async function fetchMessages(groupId: string, chatId: string) {
     chat_id: chatId,
   })
 
-  const res = await fetch(`${import.meta.env.VITE_API_URL || "https://nexus-chat-neon-one.vercel.app"}/api/history?${params.toString()}`, {
+  const res = await fetch(`${API_URL}/api/history?${params.toString()}`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",

@@ -32,7 +32,7 @@ export default function Login() {
     setLoading(true)
 
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL || "https://nexus-chat-neon-one.vercel.app"}/auth/login`, {
+      const res = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"

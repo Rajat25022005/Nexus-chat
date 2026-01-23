@@ -7,6 +7,8 @@ from fastapi.responses import JSONResponse
 import socketio
 import logging
 import os
+import uvicorn
+import uvicorn
 
 from app.auth.router import router as auth_router
 from app.api.history import router as history_router
@@ -21,7 +23,7 @@ from app.core.mongo import initialize_database, close_database, check_health
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Nexus RAG Service")
+fastapi_app = FastAPI(title="Nexus RAG Service")
 
 origins = [
     "https://nexus-backend-453285339762.europe-west1.run.app",
@@ -46,7 +48,7 @@ fastapi_app.add_middleware(
 fastapi_app.add_middleware(RequestLoggingMiddleware)
 
 # Socket.IO at /socket.io
-app.mount("/socket.io", socket_app)
+#app.mount("/socket.io", socket_app)
 
 # Include routers
 fastapi_app.include_router(auth_router)
@@ -161,5 +163,5 @@ async def general_exception_handler(request: Request, exc: Exception):
 app = socketio.ASGIApp(sio, fastapi_app)
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
+    port = int(os.getenv("PORT", 8080))
     uvicorn.run("app.main:app", host="0.0.0.0", port=port)

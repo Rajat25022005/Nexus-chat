@@ -154,7 +154,9 @@ async def send_message(sid, data):
     # Fire and forget (or safer: explicit task ref)
     asyncio.create_task(ingest_message(content, group_id, chat_id, user))
 
-    # Trigger AI Response ONLY if not disabled AND mentioned
+    # Trigger AI Response ALWAYS unless disabled
+    # (Previously it required "nexus" keyword)
+    # Trigger AI Response ONLY if "nexus" keyword is present
     if not data.get("disable_ai") and "nexus" in content.lower():
         await sio.emit("typing", {}, room=room)
         

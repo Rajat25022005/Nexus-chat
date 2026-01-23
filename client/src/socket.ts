@@ -1,7 +1,9 @@
 import { io, Socket } from "socket.io-client"
+
+
 import { API_URL } from "./api/config"
 
-export const socket = io(import.meta.env.VITE_API_URL || "https://nexus-chat-neon-one.vercel.app", {
+export const socket = io(API_URL, {
   autoConnect: false,
   transports: ["websocket", "polling"],
   reconnection: true,
