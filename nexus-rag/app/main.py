@@ -25,13 +25,6 @@ logger = logging.getLogger(__name__)
 
 fastapi_app = FastAPI(title="Nexus RAG Service")
 
-origins = [
-    "https://nexus-backend-453285339762.europe-west1.run.app",
-    "nexus-ai-483013.firebaseapp.com",
-    "www.nexusainow.online",
-    "nexus-ai-483013.web.app"
-]
-
 # Configure CORS
 fastapi_app.add_middleware(
     CORSMiddleware,
