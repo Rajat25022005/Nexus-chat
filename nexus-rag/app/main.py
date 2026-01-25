@@ -27,12 +27,9 @@ fastapi_app = FastAPI(title="Nexus RAG Service")
 
 origins = [
     "https://nexus-backend-453285339762.europe-west1.run.app",
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:5174",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000"
+    "nexus-ai-483013.firebaseapp.com",
+    "www.nexusainow.online",
+    "nexus-ai-483013.web.app"
 ]
 
 # Configure CORS
