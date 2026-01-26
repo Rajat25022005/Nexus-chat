@@ -9,6 +9,7 @@ export type Message = {
   role: "user" | "assistant"
   content: string
   sender?: string
+  sender_name?: string
 }
 
 export type Chat = {
@@ -180,7 +181,8 @@ export function useWorkspace() {
                         id: crypto.randomUUID(),
                         role: msg.role,
                         content: msg.content,
-                        sender: msg.sender
+                        sender: msg.sender,
+                        sender_name: msg.sender_name
                       },
                     ],
                   }
@@ -240,7 +242,8 @@ export function useWorkspace() {
                         id: crypto.randomUUID(),
                         role: m.role,
                         content: m.content,
-                        sender: m.sender || m.user_id
+                        sender: m.sender || m.user_id,
+                        sender_name: m.sender_name
                       })),
                     }
                     : chat

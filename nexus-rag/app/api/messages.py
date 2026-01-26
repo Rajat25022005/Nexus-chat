@@ -27,7 +27,8 @@ def get_chat_messages(
             "role": msg["role"],
             "content": msg["content"],
             "created_at": msg["created_at"],
-            "sender": msg.get("user_id") # Map user_id to sender
+            "sender": msg.get("user_id"), # Map user_id to sender
+            "sender_name": msg.get("sender_name") # Include display name
         })
 
     return messages

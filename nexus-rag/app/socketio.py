@@ -41,8 +41,20 @@ async def connect(sid, environ, auth):
             logger.warning(f"Connection rejected - invalid token from {sid}")
             return False
 
-        await sio.save_session(sid, {"user": user})
-        logger.info(f"Socket connected: {user} (sid: {sid})")
+        # Fetch full user details from DB to get name/username
+        from app.core.mongo import get_users_collection
+        users = get_users_collection()
+        user_doc = users.find_one({"email": user})
+        
+        username = user_doc.get("username", user.split("@")[0]) if user_doc else user.split("@")[0]
+        full_name = user_doc.get("full_name") if user_doc else None
+        
+        await sio.save_session(sid, {
+            "user": user,
+            "username": username,
+            "full_name": full_name
+        })
+        logger.info(f"Socket connected: {user} ({username}) (sid: {sid})")
         return True
         
     except Exception as e:
@@ -97,6 +109,13 @@ async def leave_room(sid, data):
 async def send_message(sid, data):
     session = await sio.get_session(sid)
     user = session["user"]
+    username = session.get("username")
+    full_name = session.get("full_name")
+    
+    # Determine display name: Full Name > Username > Email
+    sender_name = full_name if full_name else username
+    if not sender_name:
+        sender_name = user
 
     group_id = data["group_id"]
     chat_id = data["chat_id"]
@@ -112,6 +131,7 @@ async def send_message(sid, data):
         "chat_id": chat_id,
         "role": "user",
         "content": content,
+        "sender_name": sender_name,  # Store display name
         "created_at": datetime.utcnow(),
     })
 
@@ -121,7 +141,8 @@ async def send_message(sid, data):
         {
             "role": "user",
             "content": content,
-            "sender": user,  # Add sender identity
+            "sender": user,  # Keep email for identity
+            "sender_name": sender_name,  # Add display name
         },
         room=room,
     )
