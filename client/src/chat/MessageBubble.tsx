@@ -93,7 +93,7 @@ export default function MessageBubble({ message, currentUserId }: { message: Mes
               className="text-xs font-bold mb-1"
               style={{ color: message.role === "assistant" ? "#06cf9c" : getSenderColor(message.sender) }}
             >
-              {message.role === "assistant" ? "Nexus AI" : message.sender}
+              {message.role === "assistant" ? "Nexus AI" : (message.sender_name || message.sender)}
             </div>
           )}
 

@@ -9,6 +9,7 @@ export type Message = {
   role: "user" | "assistant"
   content: string
   sender?: string
+  sender_name?: string
 }
 
 export type Chat = {
@@ -37,6 +38,7 @@ export function useWorkspace() {
   const [activeChatId, setActiveChatId] = useState("general")
   const [isTyping, setIsTyping] = useState(false)
   const [userEmail, setUserEmail] = useState("")
+  const [username, setUsername] = useState("")
   const [error, setError] = useState<string | null>(null)
 
   const activeGroupIdRef = useRef(activeGroupId)
@@ -59,6 +61,12 @@ export function useWorkspace() {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]))
         setUserEmail(payload.sub)
+        // Set username if present, otherwise fallback to email prefix or sub
+        if (payload.username) {
+          setUsername(payload.username)
+        } else {
+          setUsername(payload.sub.split('@')[0])
+        }
       } catch (e) {
         console.error("Failed to decode token", e)
       }
@@ -173,7 +181,8 @@ export function useWorkspace() {
                         id: crypto.randomUUID(),
                         role: msg.role,
                         content: msg.content,
-                        sender: msg.sender
+                        sender: msg.sender,
+                        sender_name: msg.sender_name
                       },
                     ],
                   }
@@ -233,7 +242,8 @@ export function useWorkspace() {
                         id: crypto.randomUUID(),
                         role: m.role,
                         content: m.content,
-                        sender: m.sender || m.user_id
+                        sender: m.sender || m.user_id,
+                        sender_name: m.sender_name
                       })),
                     }
                     : chat
@@ -465,6 +475,7 @@ export function useWorkspace() {
     joinGroup: joinGroupRefactored,
     isAiDisabled,
     setIsAiDisabled,
-    userEmail
+    userEmail,
+    username
   }
 }
