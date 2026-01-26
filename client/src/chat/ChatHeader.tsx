@@ -1,15 +1,23 @@
 import logo from "../assets/logo.svg"
+import { Menu } from "lucide-react"
 
 type Props = {
   title: string
   isAiDisabled: boolean
   onToggleAi: () => void
+  onToggleSidebar: () => void
 }
 
-export default function ChatHeader({ title, isAiDisabled, onToggleAi }: Props) {
+export default function ChatHeader({ title, isAiDisabled, onToggleAi, onToggleSidebar }: Props) {
   return (
     <div className="flex items-center justify-between border-b border-nexus-border bg-nexus-header px-6 py-4">
       <div className="flex items-center gap-3">
+        <button
+          onClick={onToggleSidebar}
+          className="mr-2 text-nexus-muted hover:text-nexus-text transition"
+        >
+          <Menu className="h-6 w-6" />
+        </button>
         <img
           src={logo}
           alt="Nexus"

@@ -5,12 +5,10 @@ import AuthLayout from "../components/AuthCard"
 
 import { API_URL } from "../api/config"
 
-function isValidEmail(email: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-}
+
 
 export default function Login() {
-  const [email, setEmail] = useState("")
+  const [identifier, setIdentifier] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -19,8 +17,8 @@ export default function Login() {
   const navigate = useNavigate()
 
   const handleLogin = async () => {
-    if (!isValidEmail(email)) {
-      setError("Please enter a valid email address")
+    if (!identifier.trim()) {
+      setError("Please enter your email or username")
       return
     }
     if (!password) {
@@ -37,7 +35,7 @@ export default function Login() {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ identifier, password }),
       })
 
       if (!res.ok) {
@@ -65,10 +63,10 @@ export default function Login() {
   return (
     <AuthLayout title="Login" subtitle="Welcome back">
       <input
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="Email address"
+        type="text"
+        value={identifier}
+        onChange={(e) => setIdentifier(e.target.value)}
+        placeholder="Email or Username"
         className="
           mb-3 w-full rounded-lg
           bg-nexus-input text-nexus-text
@@ -102,7 +100,7 @@ export default function Login() {
 
       <button
         onClick={handleLogin}
-        disabled={loading || !email || !password}
+        disabled={loading || !identifier || !password}
         className="
           w-full rounded-lg bg-nexus-primary py-3 font-medium
           hover:opacity-90 transition

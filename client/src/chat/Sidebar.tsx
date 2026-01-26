@@ -14,6 +14,7 @@ type Props = {
   onNewChat: (title: string) => void
   onJoinGroup: (groupId: string) => void
   userEmail: string
+  username: string
   onDeleteGroup: (id: string) => void
   onDeleteChat: (groupId: string, chatId: string) => void
 }
@@ -28,6 +29,7 @@ export default function Sidebar({
   onNewChat,
   onJoinGroup,
   userEmail,
+  username,
   onDeleteGroup,
   onDeleteChat,
 }: Props) {
@@ -215,23 +217,45 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* Logout */}
-      <button
-        onClick={() => {
-          logout()
-          navigate("/login")
-        }}
-        className="
-          mt-4 rounded-lg
-          border border-nexus-border
-          py-2 text-sm
-          text-red-400
-          hover:bg-red-500/10
-          transition
-        "
-      >
-        Logout
-      </button>
+      {/* User Profile */}
+      <div className="mt-4 border-t border-nexus-border pt-4">
+        <div className="mb-2 px-1">
+          <p className="text-sm font-semibold text-nexus-text">{username}</p>
+          <p className="text-xs text-nexus-muted">{userEmail}</p>
+        </div>
+
+        <button
+          onClick={() => navigate("/profile")}
+          className="
+            w-full rounded-lg
+            border border-nexus-border
+            py-2 text-sm
+            text-nexus-text
+            hover:bg-nexus-card
+            transition
+            mb-2
+          "
+        >
+          Manage Profile
+        </button>
+
+        <button
+          onClick={() => {
+            logout()
+            navigate("/login")
+          }}
+          className="
+            w-full rounded-lg
+            border border-nexus-border
+            py-2 text-sm
+            text-red-400
+            hover:bg-red-500/10
+            transition
+          "
+        >
+          Logout
+        </button>
+      </div>
 
       {/* MODAL */}
       <Modal

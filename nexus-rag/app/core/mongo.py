@@ -75,6 +75,7 @@ def _create_indexes():
         # Users collection indexes
         users_col = _db["users"]
         users_col.create_index([("email", ASCENDING)], unique=True)
+        users_col.create_index([("username", ASCENDING)], unique=True)
         
         # Groups collection indexes
         groups_col = _db["groups"]
