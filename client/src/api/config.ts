@@ -5,3 +5,9 @@ if (!API_URL_ENV) {
 }
 
 export const API_URL = API_URL_ENV || "http://nexus-chat-741603203940.europe-west1.run.app"
+
+export const getImageUrl = (path: string | undefined | null) => {
+    if (!path) return undefined
+    if (path.startsWith("http") || path.startsWith("data:")) return path
+    return `${API_URL}${path}`
+}
