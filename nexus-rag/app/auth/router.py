@@ -202,6 +202,8 @@ async def oauth_login(provider: str, request: Request):
     # Calculate callback URL using the request headers or hardcoded path
     # In production, ensure this matches Google Console configuration
     redirect_uri = request.url_for('oauth_callback', provider=provider)
+    if "nexus-chat" in str(redirect_uri) and "http://" in str(redirect_uri):
+        redirect_uri = str(redirect_uri).replace("http://", "https://")
     return await oauth.create_client(provider).authorize_redirect(request, redirect_uri)
 
 
