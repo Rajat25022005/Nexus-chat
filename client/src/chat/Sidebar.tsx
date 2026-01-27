@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "../context/AuthContext"
-import type { Group } from "../hooks/useWorkspace"
+import { useWorkspace, type Group } from "../hooks/useWorkspace"
 import Modal from "../components/Modal"
 
 type Props = {
@@ -13,8 +13,6 @@ type Props = {
   onNewGroup: (name: string) => void
   onNewChat: (title: string) => void
   onJoinGroup: (groupId: string) => void
-  userEmail: string
-  username: string
   onDeleteGroup: (id: string) => void
   onDeleteChat: (groupId: string, chatId: string) => void
 }
@@ -28,12 +26,10 @@ export default function Sidebar({
   onNewGroup,
   onNewChat,
   onJoinGroup,
-  userEmail,
-  username,
   onDeleteGroup,
   onDeleteChat,
 }: Props) {
-  const { logout } = useAuth()
+  const { userEmail } = useWorkspace()
   const navigate = useNavigate()
   const [showCreateMenu, setShowCreateMenu] = useState(false)
 
@@ -72,13 +68,13 @@ export default function Sidebar({
           return (
             <div key={group.id} className="mb-4">
               {/* Group name + Delete Helper */}
-              <div className="flex items-center justify-between group/item">
+              <div className="flex items-center justify-between group/item bg-nexus-card border border-nexus-border rounded-lg p-2 mb-1 shadow-sm">
                 <div
                   onClick={() => onSelectGroup(group.id)}
-                  className={`flex-1 cursor-pointer rounded px-2 py-1 text-sm font-medium transition
+                  className={`flex-1 cursor-pointer text-sm font-bold transition
                     ${group.id === activeGroupId
-                      ? "text-nexus-text"
-                      : "text-nexus-muted hover:text-nexus-text"
+                      ? "text-nexus-primary"
+                      : "text-nexus-text hover:text-nexus-primary"
                     }`}
                 >
                   {group.name}
@@ -102,13 +98,13 @@ export default function Sidebar({
                     <div
                       key={chat.id}
                       onClick={() => onSelectChat(chat.id)}
-                      className={`flex items-center justify-between cursor-pointer rounded px-2 py-1 text-sm transition group/chat
+                      className={`flex items-center justify-between cursor-pointer rounded-lg px-3 py-2 text-sm transition group/chat mb-1 border
                       ${chat.id === activeChatId
-                          ? "bg-nexus-card text-nexus-text"
-                          : "text-nexus-muted hover:bg-nexus-card"
+                          ? "bg-[#2a3942] border-nexus-primary text-white shadow-md"
+                          : "bg-nexus-input border-transparent text-nexus-muted hover:bg-[#202c33] hover:text-nexus-text"
                         }`}
                     >
-                      <span className="truncate">{chat.title}</span>
+                      <span className="truncate font-medium">{chat.title}</span>
                       {/* Delete Chat Button: For Owner OR Personal Owner */}
                       {/* Note: Logic simplifies to: if group owner is me, I can delete any chat. */}
                       {(isOwner || isPersonal) && (
@@ -125,17 +121,7 @@ export default function Sidebar({
                 </div>
               )}
 
-              {/* Members List (for active group) */}
-              {group.id === activeGroupId && group.members && group.members.length > 0 && (
-                <div className="ml-2 mt-3 border-t border-nexus-border pt-2">
-                  <p className="mb-1 px-2 text-xs font-semibold text-nexus-muted uppercase">Members</p>
-                  {group.members.map(member => (
-                    <div key={member} className="px-2 py-0.5 text-xs text-nexus-muted truncate" title={member}>
-                      {member}
-                    </div>
-                  ))}
-                </div>
-              )}
+
             </div>
           )
         })}
@@ -217,15 +203,10 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* User Profile */}
+      {/* Footer Actions (Settings only) */}
       <div className="mt-4 border-t border-nexus-border pt-4">
-        <div className="mb-2 px-1">
-          <p className="text-sm font-semibold text-nexus-text">{username}</p>
-          <p className="text-xs text-nexus-muted">{userEmail}</p>
-        </div>
-
         <button
-          onClick={() => navigate("/profile")}
+          onClick={() => navigate("/settings")}
           className="
             w-full rounded-lg
             border border-nexus-border
@@ -233,27 +214,10 @@ export default function Sidebar({
             text-nexus-text
             hover:bg-nexus-card
             transition
-            mb-2
+            flex items-center justify-center gap-2
           "
         >
-          Manage Profile
-        </button>
-
-        <button
-          onClick={() => {
-            logout()
-            navigate("/login")
-          }}
-          className="
-            w-full rounded-lg
-            border border-nexus-border
-            py-2 text-sm
-            text-red-400
-            hover:bg-red-500/10
-            transition
-          "
-        >
-          Logout
+          <span>⚙️</span> Settings
         </button>
       </div>
 

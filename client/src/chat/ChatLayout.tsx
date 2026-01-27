@@ -5,12 +5,16 @@ import MessageList from "./MessageList"
 import MessageInput from "./MessageInput"
 import { useWorkspace } from "../hooks/useWorkspace"
 import { ErrorBoundary } from "../components/ErrorBoundary"
+import GroupDetailsModal from "../components/GroupDetailsModal"
 
 export default function ChatLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const [showGroupDetails, setShowGroupDetails] = useState(false)
+
   const {
     groups,
     activeChat,
+    activeGroup,
     activeGroupId,
     activeChatId,
     setActiveGroupId,
@@ -20,12 +24,13 @@ export default function ChatLayout() {
     createGroup,
     createChat,
     joinGroup,
-    isAiDisabled,
-    setIsAiDisabled,
     userEmail,
     username,
     deleteGroup,
     deleteChat,
+    leaveGroup,
+    removeMember,
+    profileImage,
   } = useWorkspace()
 
   return (
@@ -41,8 +46,6 @@ export default function ChatLayout() {
             onNewGroup={createGroup}
             onNewChat={createChat}
             onJoinGroup={joinGroup}
-            userEmail={userEmail}
-            username={username}
             onDeleteGroup={deleteGroup}
             onDeleteChat={deleteChat}
           />
@@ -51,13 +54,24 @@ export default function ChatLayout() {
         <div className="flex flex-1 flex-col">
           <ChatHeader
             title={activeChat.title}
-            isAiDisabled={isAiDisabled}
-            onToggleAi={() => setIsAiDisabled(!isAiDisabled)}
             onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+            onOpenDetails={() => setShowGroupDetails(true)}
           />
-          <MessageList messages={activeChat.messages} isTyping={isTyping} userEmail={userEmail} />
+          <MessageList messages={activeChat.messages} isTyping={isTyping} userEmail={userEmail} userImage={profileImage} />
           <MessageInput onSend={sendMessage} disabled={isTyping} />
         </div>
+
+        {/* Group Details Modal */}
+        {activeGroup && (
+          <GroupDetailsModal
+            isOpen={showGroupDetails}
+            onClose={() => setShowGroupDetails(false)}
+            group={activeGroup}
+            currentUserEmail={userEmail}
+            onLeave={leaveGroup}
+            onRemoveMember={removeMember}
+          />
+        )}
       </div>
     </ErrorBoundary>
   )

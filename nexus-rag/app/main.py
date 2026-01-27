@@ -11,6 +11,7 @@ import uvicorn
 import uvicorn
 
 from app.auth.router import router as auth_router
+from app.auth.otp_router import router as otp_router
 from app.api.history import router as history_router
 from app.api.ingest import router as ingest_router
 from app.api.query import router as query_router
@@ -37,11 +38,21 @@ fastapi_app.add_middleware(
 # Add request logging middleware
 fastapi_app.add_middleware(RequestLoggingMiddleware)
 
+# Add Session Middleware for OAuth
+from starlette.middleware.sessions import SessionMiddleware
+from app.core.config import JWT_SECRET
+fastapi_app.add_middleware(SessionMiddleware, secret_key=JWT_SECRET)
+
 # Socket.IO at /socket.io
 #app.mount("/socket.io", socket_app)
 
+from fastapi.staticfiles import StaticFiles
+os.makedirs("app/static/avatars", exist_ok=True)
+fastapi_app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
 # Include routers
 fastapi_app.include_router(auth_router)
+fastapi_app.include_router(otp_router)
 fastapi_app.include_router(query_router, prefix="/api")
 fastapi_app.include_router(ingest_router, prefix="/api")
 fastapi_app.include_router(messages_router)

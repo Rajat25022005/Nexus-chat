@@ -13,6 +13,11 @@ JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))
 if not JWT_SECRET:
     raise RuntimeError("JWT_SECRET is not set in .env - this is required for security")
 
+# ============ OAuth Configuration ============
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+
+
 # ============ MongoDB Configuration ============
 MONGO_URI = os.getenv("MONGO_URI")
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "nexus")
@@ -70,4 +75,15 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+# ============ SMTP Configuration ============
+MAIL_USERNAME = os.getenv("MAIL_USERNAME")
+MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
+MAIL_FROM = os.getenv("MAIL_FROM")
+MAIL_PORT = int(os.getenv("MAIL_PORT", "587"))
+MAIL_SERVER = os.getenv("MAIL_SERVER")
+
+if not MAIL_USERNAME or not MAIL_PASSWORD:
+    logging.warning("SMTP credentials not set - Email features will not work")
+
 logger.info(f"Configuration loaded - Environment: {ENVIRONMENT}, Debug: {DEBUG}")

@@ -291,3 +291,77 @@ def join_group(
 
     except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid Group ID")
+
+@router.post("/{group_id}/leave")
+def leave_group(
+    group_id: str,
+    user=Depends(get_current_user)
+):
+    import bson
+    from bson.errors import InvalidId
+    db = get_db()
+    
+    try:
+        oid = bson.ObjectId(group_id)
+        group = db.groups.find_one({"_id": oid})
+        
+        if not group:
+            raise HTTPException(status_code=404, detail="Group not found")
+            
+        if group_id.startswith("personal_"):
+             raise HTTPException(status_code=400, detail="Cannot leave personal group")
+
+        # Start of check: Prevent owner from leaving without deleting
+        if group.get("user_id") == user["email"]:
+             raise HTTPException(status_code=400, detail="Owner cannot leave the group. Delete the group instead.")
+        
+        # Remove user from members
+        result = db.groups.update_one(
+            {"_id": oid},
+            {"$pull": {"members": user["email"]}}
+        )
+        
+        if result.modified_count == 0:
+             # Either user wasn't in members or group doesn't exist (handled above)
+             pass
+             
+        return {"status": "left", "group_id": group_id}
+
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid Group ID")
+
+@router.delete("/{group_id}/members/{email}")
+def remove_member(
+    group_id: str,
+    email: str,
+    user=Depends(get_current_user)
+):
+    import bson
+    from bson.errors import InvalidId
+    db = get_db()
+    
+    try:
+        oid = bson.ObjectId(group_id)
+        group = db.groups.find_one({"_id": oid})
+        
+        if not group:
+            raise HTTPException(status_code=404, detail="Group not found")
+            
+        # Only owner can remove members
+        if group.get("user_id") != user["email"]:
+            raise HTTPException(status_code=403, detail="Only owner can remove members")
+            
+        # Cannot remove self (owner) via this specific endpoint (use leave or delete)
+        if email == user["email"]:
+             raise HTTPException(status_code=400, detail="Owner cannot be removed. Transfer ownership or delete group.")
+             
+        # Remove the specific member
+        db.groups.update_one(
+            {"_id": oid},
+            {"$pull": {"members": email}}
+        )
+        
+        return {"status": "removed", "member": email, "group_id": group_id}
+
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid Group ID")
