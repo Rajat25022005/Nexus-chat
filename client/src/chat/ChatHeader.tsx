@@ -3,12 +3,11 @@ import { Menu } from "lucide-react"
 
 type Props = {
   title: string
-  isAiDisabled: boolean
-  onToggleAi: () => void
   onToggleSidebar: () => void
+  onOpenDetails: () => void
 }
 
-export default function ChatHeader({ title, isAiDisabled, onToggleAi, onToggleSidebar }: Props) {
+export default function ChatHeader({ title, onToggleSidebar, onOpenDetails }: Props) {
   return (
     <div className="flex items-center justify-between border-b border-nexus-border bg-nexus-header px-6 py-4">
       <div className="flex items-center gap-3">
@@ -36,15 +35,13 @@ export default function ChatHeader({ title, isAiDisabled, onToggleAi, onToggleSi
       </div>
 
       <div className="flex items-center gap-2">
-        <label className="flex items-center gap-2 text-sm text-nexus-text cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={!isAiDisabled}
-            onChange={onToggleAi}
-            className="accent-nexus-primary w-4 h-4 cursor-pointer"
-          />
-          <span>AI Assistant</span>
-        </label>
+        <button
+          onClick={onOpenDetails}
+          className="text-nexus-muted hover:text-nexus-text p-2 rounded hover:bg-nexus-card transition"
+          title="Group Info"
+        >
+          ℹ️
+        </button>
       </div>
     </div>
   )

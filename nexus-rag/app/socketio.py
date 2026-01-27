@@ -3,6 +3,8 @@ import asyncio
 import logging
 from jose import jwt
 from datetime import datetime
+import random
+import string
 
 from app.core.config import JWT_SECRET, JWT_ALGORITHM, ALLOWED_ORIGINS
 from app.core.mongo import get_message_collection
@@ -48,13 +50,17 @@ async def connect(sid, environ, auth):
         
         username = user_doc.get("username", user.split("@")[0]) if user_doc else user.split("@")[0]
         full_name = user_doc.get("full_name") if user_doc else None
+        is_private = user_doc.get("is_private", False) if user_doc else False
+        profile_image = user_doc.get("profile_image") if user_doc else None
         
         await sio.save_session(sid, {
             "user": user,
             "username": username,
-            "full_name": full_name
+            "full_name": full_name,
+            "is_private": is_private,
+            "profile_image": profile_image
         })
-        logger.info(f"Socket connected: {user} ({username}) (sid: {sid})")
+        logger.info(f"Socket connected: {user} ({username}) [Private: {is_private}] (sid: {sid})")
         return True
         
     except Exception as e:
@@ -109,13 +115,45 @@ async def leave_room(sid, data):
 async def send_message(sid, data):
     session = await sio.get_session(sid)
     user = session["user"]
-    username = session.get("username")
-    full_name = session.get("full_name")
+    # Fetch fresh user data to get updated profile image
+    from app.core.mongo import get_users_collection
+    users_col = get_users_collection()
+    user_doc = users_col.find_one({"email": user})
     
-    # Determine display name: Full Name > Username > Email
+    if user_doc:
+        full_name = user_doc.get("full_name")
+        username = user_doc.get("username", user.split("@")[0])
+        is_private = user_doc.get("is_private", False)
+        profile_image = user_doc.get("profile_image")
+    else:
+        # Fallback to session if DB fail? Rare.
+        username = session.get("username")
+        full_name = session.get("full_name")
+        is_private = session.get("is_private", False)
+        profile_image = session.get("profile_image")
+
+    # Determine display name (for Chat Bubble)
     sender_name = full_name if full_name else username
     if not sender_name:
-        sender_name = user
+        sender_name = user # Default to email if nothing else
+        
+    if is_private:
+        # Mask the name if account is private
+        if "anon_id" not in session:
+           suffix = ''.join(random.choices(string.digits, k=4))
+           session["anon_id"] = f"User-{suffix}"
+           await sio.save_session(sid, session)
+        
+        sender_name = session["anon_id"]
+        # Hide avatar if private
+        profile_image = None
+    
+    sender_image = profile_image
+
+    # Determine identity for AI Context (User requested AI to access full name)
+    ai_context_name = full_name if full_name else username
+    if not ai_context_name:
+        ai_context_name = user
 
     group_id = data["group_id"]
     chat_id = data["chat_id"]
@@ -143,6 +181,7 @@ async def send_message(sid, data):
             "content": content,
             "sender": user,  # Keep email for identity
             "sender_name": sender_name,  # Add display name
+            "sender_image": sender_image, # Add display image
         },
         room=room,
     )
@@ -175,10 +214,8 @@ async def send_message(sid, data):
     # Fire and forget (or safer: explicit task ref)
     asyncio.create_task(ingest_message(content, group_id, chat_id, user))
 
-    # Trigger AI Response ALWAYS unless disabled
-    # (Previously it required "nexus" keyword)
-    # Trigger AI Response ONLY if "nexus" keyword is present
-    if not data.get("disable_ai") and "nexus" in content.lower():
+    # Trigger AI Response ONLY if explicitly requested
+    if data.get("trigger_ai"):
         await sio.emit("typing", {}, room=room)
         
         from app.services.chat_service import process_chat_message
@@ -212,7 +249,8 @@ async def send_message(sid, data):
                 user_query=content,
                 group_id=group_id,
                 chat_id=chat_id,
-                user_email=user, # user is 'sub' (email) from token
+                user_email=user, # Keep email for unique ID
+                user_name=ai_context_name, # Pass full name for AI context
                 history=history_list,
             )
 

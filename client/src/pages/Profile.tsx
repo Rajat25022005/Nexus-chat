@@ -2,8 +2,9 @@ import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "../context/AuthContext"
 import { useWorkspace } from "../hooks/useWorkspace"
-import { updateProfile } from "../api/auth"
-import { ArrowLeft } from "lucide-react"
+import { updateProfile, getProfile, uploadAvatar } from "../api/auth"
+import { ArrowLeft, Camera, User } from "lucide-react"
+import { API_URL, getImageUrl } from "../api/config"
 
 export default function Profile() {
     const { token, login } = useAuth()
@@ -14,7 +15,9 @@ export default function Profile() {
     const [email, setEmail] = useState("")
     const [fullName, setFullName] = useState("")
     const [bio, setBio] = useState("")
+    const [profileImage, setProfileImage] = useState<string | null>(null)
     const [loading, setLoading] = useState(false)
+    const [imageLoading, setImageLoading] = useState(false)
     const [error, setError] = useState("")
     const [success, setSuccess] = useState("")
 
@@ -26,16 +29,12 @@ export default function Profile() {
         const fetchMe = async () => {
             if (!token) return
             try {
-                const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:8080"}/auth/me`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                })
-                if (res.ok) {
-                    const data = await res.json()
-                    if (data.full_name) setFullName(data.full_name)
-                    if (data.bio) setBio(data.bio)
-                    if (data.username) setUsername(data.username)
-                    if (data.email) setEmail(data.email)
-                }
+                const data = await getProfile(token)
+                setFullName(data.full_name || "")
+                setBio(data.bio || "")
+                setUsername(data.username || "")
+                setEmail(data.email || "")
+                if (data.profile_image) setProfileImage(data.profile_image)
             } catch (e) {
                 console.error("Failed to fetch profile", e)
             }
@@ -69,6 +68,25 @@ export default function Profile() {
         }
     }
 
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file || !token) return
+
+        setImageLoading(true)
+        setError("")
+        try {
+            const data = await uploadAvatar(token, file)
+            // Add timestamp/random query param to force refresh if URL is same (though our filename is stable based on ID, so cache bust is good)
+            // Actually filename is ID + ext, so effectively stable.
+            setProfileImage(`${data.profile_image}?t=${Date.now()}`)
+        } catch (err) {
+            console.error(err)
+            setError("Failed to upload image")
+        } finally {
+            setImageLoading(false)
+        }
+    }
+
     return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-nexus-bg text-nexus-text">
             <div className="w-full max-w-md p-8 bg-nexus-card rounded-xl border border-nexus-border shadow-2xl my-8">
@@ -82,6 +100,38 @@ export default function Profile() {
                     <h1 className="text-2xl font-bold">Profile Settings</h1>
                 </div>
 
+
+
+                <div className="flex justify-center mb-8">
+
+                    <div className="relative group cursor-pointer">
+                        <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-nexus-bg ring-2 ring-nexus-border bg-nexus-input flex items-center justify-center">
+
+
+                            {profileImage ? (
+                                <img src={getImageUrl(profileImage)} alt="Profile" className="w-full h-full object-cover" />
+                            ) : (
+                                <User className="w-10 h-10 text-nexus-muted" />
+                            )}
+                            {imageLoading && (
+                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                                </div>
+                            )}
+                        </div>
+                        <label className="absolute bottom-0 right-0 bg-nexus-primary p-2 rounded-full cursor-pointer hover:bg-opacity-90 transition shadow-lg">
+                            <Camera className="w-4 h-4 text-white" />
+                            <input
+                                type="file"
+                                className="hidden"
+                                accept="image/*"
+                                onChange={handleImageUpload}
+                                disabled={imageLoading}
+                            />
+                        </label>
+                    </div>
+                </div>
+
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-nexus-muted mb-1">Full Name</label>
@@ -90,9 +140,10 @@ export default function Profile() {
                             value={fullName}
                             onChange={(e) => setFullName(e.target.value)}
                             className="w-full rounded-lg bg-nexus-input border border-nexus-border px-4 py-2 text-nexus-text focus:border-nexus-primary outline-none"
-                            placeholder="John Doe"
                         />
                     </div>
+
+
 
                     <div>
                         <label className="block text-sm font-medium text-nexus-muted mb-1">Username</label>
@@ -135,7 +186,7 @@ export default function Profile() {
                         {loading ? "Saving..." : "Save Changes"}
                     </button>
                 </form>
-            </div>
-        </div>
+            </div >
+        </div >
     )
 }

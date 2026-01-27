@@ -1,16 +1,17 @@
 import { useState } from "react"
+import { Sparkles, Send } from "lucide-react"
 
 type Props = {
-  onSend: (text: string) => void
+  onSend: (text: string, triggerAi?: boolean) => void
   disabled?: boolean
 }
 
 export default function MessageInput({ onSend, disabled }: Props) {
   const [text, setText] = useState("")
 
-  const handleSend = () => {
+  const handleSend = (triggerAi: boolean) => {
     if (!text.trim() || disabled) return
-    onSend(text)
+    onSend(text, triggerAi)
     setText("")
   }
 
@@ -25,7 +26,7 @@ export default function MessageInput({ onSend, disabled }: Props) {
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault()
-              handleSend()
+              handleSend(false)
             }
           }}
           placeholder={disabled ? "Nexus AI is replying…" : "Type a message..."}
@@ -39,17 +40,34 @@ export default function MessageInput({ onSend, disabled }: Props) {
           "
         />
 
+        {/* AI Button */}
         <button
-          onClick={handleSend}
-          disabled={disabled}
+          onClick={() => handleSend(true)}
+          disabled={disabled || !text.trim()}
+          className="
+            flex items-center gap-2 rounded-xl border border-nexus-primary/50 bg-nexus-primary/10 px-4 py-3
+            text-sm font-medium text-nexus-primary
+            hover:bg-nexus-primary/20 transition
+            disabled:opacity-50 disabled:cursor-not-allowed
+          "
+          title="Send and ask AI"
+        >
+          <Sparkles className="w-4 h-4" />
+          <span className="hidden sm:inline">Ask AI</span>
+        </button>
+
+        {/* Send Button */}
+        <button
+          onClick={() => handleSend(false)}
+          disabled={disabled || !text.trim()}
           className="
             rounded-xl bg-nexus-primary px-5 py-3
             text-sm font-medium text-white
             hover:opacity-90 transition
-            disabled:opacity-50
+            disabled:opacity-50 disabled:cursor-not-allowed
           "
         >
-          Send
+          <Send className="w-4 h-4" />
         </button>
       </div>
     </div>

@@ -15,6 +15,7 @@ async def process_chat_message(
     group_id: str,
     chat_id: str,
     user_email: str,
+    user_name: str | None = None,
     history: list = []
 ):
     """
@@ -30,13 +31,14 @@ async def process_chat_message(
         group_id: Group identifier
         chat_id: Chat identifier
         user_email: User's email (from JWT)
+        user_name: User's display name for AI context
         history: List of recent messages for context
     
     Returns:
         Tuple of (answer, retrieved_documents)
     """
     try:
-        logger.debug(f"Processing chat message for user: {user_email}")
+        logger.debug(f"Processing chat message for user: {user_email} ({user_name})")
         
         # 1. Retrieve Context (Run in executor to avoid blocking)
         loop = asyncio.get_running_loop()
@@ -74,6 +76,7 @@ async def process_chat_message(
         # 2. Build Prompt
         prompt = build_prompt(
             user_query=user_query,
+            user_name=user_name if user_name else user_email,
             retrieved_docs=documents,
             chat_history=history,
             group_members=group_members

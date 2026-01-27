@@ -35,7 +35,7 @@ COPY . .
 
 # Expose port
 # Expose port
-EXPOSE 8000
+EXPOSE 8080
 
 # Run the app
 CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}

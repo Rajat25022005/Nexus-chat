@@ -16,5 +16,10 @@ requests
 jinja2
 python-jose[cryptography]
 passlib[bcrypt]==1.7.4
-bcrypt==3.2.2
+bcrypt>=4.0.1
 email-validator
+python-multipart
+authlib
+itsdangerous
+httpx
+dnspython>=2.6.0

@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react"
 import { fetchMessages } from "../api/messages"
+import { getProfile } from "../api/auth"
 import { socket } from "../socket"
 import axios from "axios"
 
@@ -10,6 +11,7 @@ export type Message = {
   content: string
   sender?: string
   sender_name?: string
+  sender_image?: string
 }
 
 export type Chat = {
@@ -33,12 +35,12 @@ const API_URL = `${BASE_URL}/api`
 export function useWorkspace() {
   const [groups, setGroups] = useState<Group[]>([])
 
-  const [isAiDisabled, setIsAiDisabled] = useState(false)
   const [activeGroupId, setActiveGroupId] = useState("")
   const [activeChatId, setActiveChatId] = useState("general")
   const [isTyping, setIsTyping] = useState(false)
   const [userEmail, setUserEmail] = useState("")
   const [username, setUsername] = useState("")
+  const [profileImage, setProfileImage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const activeGroupIdRef = useRef(activeGroupId)
@@ -67,6 +69,12 @@ export function useWorkspace() {
         } else {
           setUsername(payload.sub.split('@')[0])
         }
+
+        // Fetch full profile to get image
+        getProfile(token).then(data => {
+          if (data.profile_image) setProfileImage(data.profile_image)
+        }).catch(console.error)
+
       } catch (e) {
         console.error("Failed to decode token", e)
       }
@@ -182,7 +190,8 @@ export function useWorkspace() {
                         role: msg.role,
                         content: msg.content,
                         sender: msg.sender,
-                        sender_name: msg.sender_name
+                        sender_name: msg.sender_name,
+                        sender_image: msg.sender_image
                       },
                     ],
                   }
@@ -243,7 +252,8 @@ export function useWorkspace() {
                         role: m.role,
                         content: m.content,
                         sender: m.sender || m.user_id,
-                        sender_name: m.sender_name
+                        sender_name: m.sender_name,
+                        sender_image: m.sender_image
                       })),
                     }
                     : chat
@@ -262,9 +272,9 @@ export function useWorkspace() {
   }, [activeGroupId, activeChatId])
 
 
-
   // SEND MESSAGE (OPTIMISTIC)
-  const sendMessage = (text: string) => {
+  // SEND MESSAGE (OPTIMISTIC)
+  const sendMessage = (text: string, triggerAi: boolean = false) => {
     if (!text.trim()) return
 
     setGroups(prev =>
@@ -282,7 +292,8 @@ export function useWorkspace() {
                       id: crypto.randomUUID(),
                       role: "user",
                       content: text,
-                      sender: userEmail
+                      sender: userEmail,
+                      sender_image: profileImage || undefined
                     },
                   ],
                 }
@@ -297,7 +308,7 @@ export function useWorkspace() {
       group_id: activeGroupId,
       chat_id: activeChatId,
       content: text,
-      disable_ai: isAiDisabled,
+      trigger_ai: triggerAi,
     })
   }
 
@@ -456,6 +467,59 @@ export function useWorkspace() {
     }
   }
 
+  const leaveGroup = async (groupId: string) => {
+    const token = localStorage.getItem("nexus_token")
+    if (!confirm("Are you sure you want to leave this group?")) return
+
+    try {
+      await axios.post(`${API_URL}/groups/${groupId}/leave`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+
+      // Update State: Remove group from list
+      const newGroups = groups.filter(g => g.id !== groupId)
+      setGroups(newGroups)
+
+      // If we were in that group, switch out
+      if (activeGroupId === groupId) {
+        if (newGroups.length > 0) {
+          setActiveGroupId(newGroups[0].id)
+          if (newGroups[0].chats.length > 0) setActiveChatId(newGroups[0].chats[0].id)
+        } else {
+          setActiveGroupId("")
+          setActiveChatId("")
+        }
+      }
+
+    } catch (err) {
+      console.error(err)
+      alert("Failed to leave group. Owners cannot leave (delete instead).")
+    }
+  }
+
+  const removeMember = async (groupId: string, email: string) => {
+    const token = localStorage.getItem("nexus_token")
+    if (!confirm(`Remove ${email} from this group?`)) return
+
+    try {
+      await axios.delete(`${API_URL}/groups/${groupId}/members/${email}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+
+      // Update State: Remove member from group's member list
+      setGroups(prev => prev.map(g => {
+        if (g.id === groupId) {
+          return { ...g, members: g.members.filter(m => m !== email) }
+        }
+        return g
+      }))
+
+    } catch (err) {
+      console.error(err)
+      alert("Failed to remove member. Ensure you are the owner.")
+    }
+  }
+
   return {
     groups,
     activeGroup: activeGroup || groups[0],
@@ -473,9 +537,10 @@ export function useWorkspace() {
     deleteGroup,
     deleteChat,
     joinGroup: joinGroupRefactored,
-    isAiDisabled,
-    setIsAiDisabled,
+    leaveGroup,
+    removeMember,
     userEmail,
-    username
+    username,
+    profileImage
   }
 }

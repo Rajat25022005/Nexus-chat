@@ -1,6 +1,13 @@
+import logo from '../assets/logo.svg'
 import ReactMarkdown from 'react-markdown'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { getImageUrl } from '../api/config'
+
+// ... existing code
+
+// Inside MessageBubble
+
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { useState } from 'react'
 
 import type { Message } from "../hooks/useWorkspace"
@@ -48,7 +55,21 @@ const getSenderColor = (sender?: string) => {
   return COLORS[index]
 }
 
-export default function MessageBubble({ message, currentUserId }: { message: Message, currentUserId: string }) {
+const Avatar = ({ name, image }: { name?: string, image?: string, isMe?: boolean }) => {
+  return (
+    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-700 overflow-hidden flex items-center justify-center shadow-sm border border-white/10 mt-1 select-none">
+      {image ? (
+        <img src={image} alt={name} className="w-full h-full object-cover" />
+      ) : (
+        <div className="text-xs text-gray-300 font-bold uppercase">
+          {(name || "?")[0]}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function MessageBubble({ message, currentUserId, currentUserImage }: { message: Message, currentUserId: string, currentUserImage?: string | null }) {
   // Strict check: It is me only if sender matches currentUserId. 
   // If sender is undefined, we assume it's NOT me (unless we are sure otherwise, but safer to assume other).
   // Ideally all messages should have sender now.
@@ -83,7 +104,8 @@ export default function MessageBubble({ message, currentUserId }: { message: Mes
 
   return (
     <div className={`flex flex-col mb-2 ${isMe ? "items-end" : "items-start"}`}>
-      <div className={`flex w-full ${alignClass}`}>
+      <div className={`flex w-full ${alignClass} gap-2 px-2`}>
+        {!isMe && <Avatar name={message.sender_name || "AI"} image={message.role === "assistant" ? logo : getImageUrl(message.sender_image)} />}
         <div
           className={bubbleContentClass}
         >
@@ -136,10 +158,18 @@ export default function MessageBubble({ message, currentUserId }: { message: Mes
             // User (Me or Other)
             <div className="whitespace-pre-wrap text-[15px] leading-relaxed relative pb-1">
               {message.content}
-              {/* Tiny timestamp placeholder if we had it, but for now just text */}
             </div>
           )}
         </div>
+
+        {/* For ME: Use sender_image from message if available, otherwise fallback to currentUserImage (from useWorkspace) */}
+        {isMe && (
+          <Avatar
+            name="Me"
+            image={getImageUrl(message.sender_image || currentUserImage)}
+            isMe
+          />
+        )}
       </div>
     </div>
   )
