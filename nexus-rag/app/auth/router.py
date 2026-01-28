@@ -10,6 +10,7 @@ import string
 import shutil
 import os
 import logging
+import hashlib
 from pathlib import Path
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -53,7 +54,7 @@ def signup(data: SignupRequest):
     users.insert_one({
         "username": final_username,
         "email": data.email,
-        "password_hash": hash_password(data.password),
+        "password_hash": hash_password(hashlib.sha256(data.password.encode()).hexdigest()),
     })
 
     token = create_access_token({"sub": data.email, "username": final_username})
