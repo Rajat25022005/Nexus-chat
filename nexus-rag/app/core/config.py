@@ -4,6 +4,22 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# ============ Application Settings ============
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+DEBUG = os.getenv("DEBUG", "true").lower() == "true"
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
+# ============ Logging Configuration ============
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL.upper()),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+    ]
+)
+
+logger = logging.getLogger(__name__)
+
 # ============ JWT Configuration ============
 JWT_SECRET = os.getenv("JWT_SECRET")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
@@ -49,10 +65,7 @@ if not GROQ_API_KEY:
 TOKENIZERS_PARALLELISM = os.getenv("TOKENIZERS_PARALLELISM", "false").lower() == "true"
 
 
-# ============ Application Settings ============
-ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
-DEBUG = os.getenv("DEBUG", "true").lower() == "true"
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
 
 # ============ Rate Limiting ============
 RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
@@ -62,7 +75,7 @@ RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
 # CORS (FIXED & SAFE)
 # =========================================================
 
-def _parse_origins(raw: str) -> List[str]:
+def _parse_origins(raw: str) -> list[str]:
     return [o.strip() for o in raw.split(",") if o.strip()]
 
 # Default origins that should always be allowed
@@ -74,7 +87,7 @@ DEFAULT_ORIGINS = [
     "https://nexus-ai-483013.firebaseapp.com"
 ]
 
-ALLOWED_ORIGINS: List[str] = [o for o in DEFAULT_ORIGINS]
+ALLOWED_ORIGINS: list[str] = [o for o in DEFAULT_ORIGINS]
 
 # From ALLOWED_ORIGINS env
 raw_origins = os.getenv("ALLOWED_ORIGINS", "")
@@ -92,16 +105,7 @@ if PRODUCTION_ORIGIN and PRODUCTION_ORIGIN not in ALLOWED_ORIGINS:
 if not raw_origins and not PRODUCTION_ORIGIN:
     logger.info("ALLOWED_ORIGINS not set – using default allowed origins")
 
-# ============ Logging Configuration ============
-logging.basicConfig(
-    level=getattr(logging, LOG_LEVEL.upper()),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-    ]
-)
 
-logger = logging.getLogger(__name__)
 
 # ============ SMTP Configuration ============
 MAIL_USERNAME = os.getenv("MAIL_USERNAME")
