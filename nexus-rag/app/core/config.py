@@ -45,6 +45,10 @@ LLM_MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "3"))
 if not GROQ_API_KEY:
     logging.warning("GROQ_API_KEY is not set - AI features will not work")
 
+# ============ HuggingFace / Systems ============
+TOKENIZERS_PARALLELISM = os.getenv("TOKENIZERS_PARALLELISM", "false").lower() == "true"
+
+
 # ============ Application Settings ============
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 DEBUG = os.getenv("DEBUG", "true").lower() == "true"
