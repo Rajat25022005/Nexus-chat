@@ -26,15 +26,6 @@ logger = logging.getLogger(__name__)
 
 fastapi_app = FastAPI(title="Nexus RAG Service")
 
-# Configure CORS
-fastapi_app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # Add request logging middleware
 fastapi_app.add_middleware(RequestLoggingMiddleware)
 
@@ -42,6 +33,16 @@ fastapi_app.add_middleware(RequestLoggingMiddleware)
 from starlette.middleware.sessions import SessionMiddleware
 from app.core.config import JWT_SECRET
 fastapi_app.add_middleware(SessionMiddleware, secret_key=JWT_SECRET)
+
+# Configure CORS (Added LAST so it runs FIRST)
+fastapi_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"]
+)
 
 # Socket.IO at /socket.io
 #app.mount("/socket.io", socket_app)
