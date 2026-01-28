@@ -96,26 +96,32 @@ RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
 def _parse_origins(raw: str) -> List[str]:
     return [o.strip() for o in raw.split(",") if o.strip()]
 
-ALLOWED_ORIGINS: List[str] = []
+# Default origins that should always be allowed
+DEFAULT_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://www.nexusainow.online",
+    "https://nexusainow.online",
+    "https://nexus-ai-483013.firebaseapp.com"
+]
+
+ALLOWED_ORIGINS: List[str] = [o for o in DEFAULT_ORIGINS]
 
 # From ALLOWED_ORIGINS env
 raw_origins = os.getenv("ALLOWED_ORIGINS", "")
-ALLOWED_ORIGINS.extend(_parse_origins(raw_origins))
+if raw_origins:
+    env_origins = _parse_origins(raw_origins)
+    for origin in env_origins:
+        if origin not in ALLOWED_ORIGINS:
+            ALLOWED_ORIGINS.append(origin)
 
 # Explicit production origin
 PRODUCTION_ORIGIN = os.getenv("PRODUCTION_ORIGIN")
-if PRODUCTION_ORIGIN:
+if PRODUCTION_ORIGIN and PRODUCTION_ORIGIN not in ALLOWED_ORIGINS:
     ALLOWED_ORIGINS.append(PRODUCTION_ORIGIN.strip())
 
-# Safe fallback (never empty)
-if not ALLOWED_ORIGINS:
-    ALLOWED_ORIGINS = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "https://www.nexusainow.online",
-        "https://nexusainow.online",
-    ]
-    logger.warning("ALLOWED_ORIGINS not set – using safe defaults")
+if not raw_origins and not PRODUCTION_ORIGIN:
+    logger.info("ALLOWED_ORIGINS not set – using default allowed origins")
 
 logger.info(f"CORS allowed origins: {ALLOWED_ORIGINS}")
 
