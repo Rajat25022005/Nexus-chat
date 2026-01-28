@@ -4,7 +4,7 @@ if (!API_URL_ENV) {
     console.warn("VITE_API_URL not set, using production backend as default")
 }
 
-export const API_URL = API_URL_ENV || "http://nexus-chat-741603203940.europe-west1.run.app"
+export const API_URL = API_URL_ENV || "https://nexus-chat-741603203940.europe-west1.run.app"
 
 export const getImageUrl = (path: string | undefined | null) => {
     if (!path) return undefined
