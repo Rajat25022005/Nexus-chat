@@ -95,8 +95,11 @@ async def startup_event():
         initialize_database()
         logger.info("✓ Database initialized successfully")
     except Exception as e:
+        # We catch the error but DO NOT raise it, so the app can still start.
+        # This allows us to see the error in Cloud Run logs instead of a generic "Failed to start" timeout.
         logger.error(f"✗ Failed to initialize database: {e}")
-        raise
+        logger.error("Application starting in DEGRADED mode (Database unavailable)")
+        # raise  <-- Commented out to allow startup
     
     # Log registered routes for debugging
     logger.info("Registered routes:")
