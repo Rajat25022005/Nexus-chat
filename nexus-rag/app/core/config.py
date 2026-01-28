@@ -54,16 +54,39 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
 RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
 
-# ============ CORS Configuration ============
-ALLOWED_ORIGINS = os.getenv(
-    "ALLOWED_ORIGINS",
-    "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174,https://www.nexusainow.online,https://nexusainow.online,https://nexus-ai-483013.firebaseapp.com"
-).split(",")
+# =========================================================
+# CORS (FIXED & SAFE)
+# =========================================================
+
+def _parse_origins(raw: str) -> List[str]:
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
+# Default origins that should always be allowed
+DEFAULT_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://www.nexusainow.online",
+    "https://nexusainow.online",
+    "https://nexus-ai-483013.firebaseapp.com"
+]
+
+ALLOWED_ORIGINS: List[str] = [o for o in DEFAULT_ORIGINS]
+
+# From ALLOWED_ORIGINS env
+raw_origins = os.getenv("ALLOWED_ORIGINS", "")
+if raw_origins:
+    env_origins = _parse_origins(raw_origins)
+    for origin in env_origins:
+        if origin not in ALLOWED_ORIGINS:
+            ALLOWED_ORIGINS.append(origin)
 
 # Add production origin if set
 PRODUCTION_ORIGIN = os.getenv("PRODUCTION_ORIGIN")
-if PRODUCTION_ORIGIN:
-    ALLOWED_ORIGINS.append(PRODUCTION_ORIGIN)
+if PRODUCTION_ORIGIN and PRODUCTION_ORIGIN not in ALLOWED_ORIGINS:
+    ALLOWED_ORIGINS.append(PRODUCTION_ORIGIN.strip())
+
+if not raw_origins and not PRODUCTION_ORIGIN:
+    logger.info("ALLOWED_ORIGINS not set – using default allowed origins")
 
 # ============ Logging Configuration ============
 logging.basicConfig(
