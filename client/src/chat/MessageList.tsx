@@ -7,9 +7,12 @@ type Props = {
   isTyping: boolean
   userEmail: string
   userImage: string | null
+  onReply: (message: Message) => void
+  onDelete: (messageId: string, type: "everyone" | "me") => void
+  onEdit: (messageId: string, content: string) => void
 }
 
-export default function MessageList({ messages, isTyping, userEmail, userImage }: Props) {
+export default function MessageList({ messages, isTyping, userEmail, userImage, onReply, onDelete, onEdit }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -26,7 +29,15 @@ export default function MessageList({ messages, isTyping, userEmail, userImage }
         )}
 
         {messages.map(msg => (
-          <MessageBubble key={msg.id} message={msg} currentUserId={userEmail} currentUserImage={userImage} />
+          <MessageBubble
+            key={msg.id}
+            message={msg}
+            currentUserId={userEmail}
+            currentUserImage={userImage}
+            onReply={onReply}
+            onDelete={onDelete}
+            onEdit={onEdit}
+          />
         ))}
 
         {isTyping && (

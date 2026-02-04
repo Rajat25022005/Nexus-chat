@@ -42,6 +42,8 @@ async def connect(sid, environ, auth):
         if not user:
             logger.warning(f"Connection rejected - invalid token from {sid}")
             return False
+            
+        print(f"DEBUG: Socket connected for user {user} (sid: {sid})")
 
         # Fetch full user details from DB to get name/username
         from app.core.mongo import get_users_collection
@@ -161,9 +163,12 @@ async def send_message(sid, data):
 
     room = f"{group_id}:{chat_id}"
 
+    reply_to = data.get("replyTo")
+    print(f"DEBUG: Received message with replyTo: {reply_to}")
+
     # store message
     messages = get_message_collection()
-    messages.insert_one({
+    message_doc = {
         "user_id": user,
         "group_id": group_id,
         "chat_id": chat_id,
@@ -171,18 +176,29 @@ async def send_message(sid, data):
         "content": content,
         "sender_name": sender_name,  # Store display name
         "created_at": datetime.utcnow(),
-    })
+    }
+    
+    if reply_to:
+        message_doc["replyTo"] = reply_to
+
+    messages.insert_one(message_doc)
 
     # broadcast
+    emit_data = {
+        "role": "user",
+        "content": content,
+        "sender": user,  # Keep email for identity
+        "sender_name": sender_name,  # Add display name
+        "sender_image": sender_image, # Add display image
+        "id": str(message_doc["_id"]) # CRITICAL: Return DB ID so client can delete/reference it
+    }
+    
+    if reply_to:
+        emit_data["replyTo"] = reply_to
+
     await sio.emit(
         "new_message",
-        {
-            "role": "user",
-            "content": content,
-            "sender": user,  # Keep email for identity
-            "sender_name": sender_name,  # Add display name
-            "sender_image": sender_image, # Add display image
-        },
+        emit_data,
         room=room,
     )
 
@@ -245,6 +261,12 @@ async def send_message(sid, data):
             f.write(str(history_list))
         
         try:
+            reply_to_context = None
+            if reply_to:
+                # reply_to is a dict {id, sender, content}
+                reply_to_context = f"Replying to {reply_to.get('sender', 'Unknown')}: {reply_to.get('content', '')}"
+                print(f"DEBUG: Generated reply_to_context: {reply_to_context}")
+
             answer, _ = await process_chat_message(
                 user_query=content,
                 group_id=group_id,
@@ -252,6 +274,7 @@ async def send_message(sid, data):
                 user_email=user, # Keep email for unique ID
                 user_name=ai_context_name, # Pass full name for AI context
                 history=history_list,
+                reply_to_context=reply_to_context
             )
 
             await sio.emit(
@@ -292,3 +315,126 @@ async def typing(sid, data):
         
     except Exception as e:
         logger.error(f"Error in typing handler: {e}", exc_info=True)
+@sio.event
+async def delete_message(sid, data):
+    """Handle message deletion"""
+    try:
+        session = await sio.get_session(sid)
+        user = session["user"]
+        
+        message_id = data.get("message_id")
+        delete_type = data.get("delete_type") # "everyone" or "me"
+        group_id = data.get("group_id")
+        chat_id = data.get("chat_id")
+        
+        if not all([message_id, delete_type, group_id, chat_id]):
+            return
+
+        from app.core.mongo import get_message_collection
+        from bson import ObjectId
+        messages = get_message_collection()
+        
+        room = f"{group_id}:{chat_id}"
+        
+        if delete_type == "everyone":
+            # Verify sender
+            msg = messages.find_one({"_id": ObjectId(message_id)})
+            if not msg:
+                return
+                
+            if msg.get("user_id") != user:
+                # Unauthorized
+                return
+
+            # Update DB
+            messages.update_one(
+                {"_id": ObjectId(message_id)},
+                {
+                    "$set": {
+                        "content": "This message was deleted",
+                        "is_deleted": True,
+                        "replyTo": None # Remove reply reference if deleted
+                    }
+                }
+            )
+            
+            # Broadcast to everyone
+            await sio.emit("message_deleted", {
+                "id": message_id,
+                "type": "everyone",
+                "chat_id": chat_id,
+                "group_id": group_id
+            }, room=room)
+            
+        elif delete_type == "me":
+            # Add user to deleted_for array
+            messages.update_one(
+                {"_id": ObjectId(message_id)},
+                {"$addToSet": {"deleted_for": user}}
+            )
+            
+            # Emit only to sender (using sid directly)
+            await sio.emit("message_deleted", {
+                "id": message_id,
+                "type": "me",
+                "chat_id": chat_id,
+                "group_id": group_id
+            }, room=sid)
+
+    except Exception as e:
+        logger.error(f"Error in delete_message: {e}", exc_info=True)
+
+
+@sio.event
+async def edit_message(sid, data):
+    """Handle message editing"""
+    try:
+        session = await sio.get_session(sid)
+        user = session["user"]
+        
+        message_id = data.get("message_id")
+        new_content = data.get("content")
+        group_id = data.get("group_id")
+        chat_id = data.get("chat_id")
+        
+        if not all([message_id, new_content, group_id, chat_id]):
+            return
+
+        from app.core.mongo import get_message_collection
+        from bson import ObjectId
+        messages = get_message_collection()
+        
+        room = f"{group_id}:{chat_id}"
+        
+        # Verify sender
+        msg = messages.find_one({"_id": ObjectId(message_id)})
+        if not msg:
+            return
+            
+        if msg.get("user_id") != user:
+            # Unauthorized
+            return
+
+        # Update DB
+        messages.update_one(
+            {"_id": ObjectId(message_id)},
+            {
+                "$set": {
+                    "content": new_content,
+                    "is_edited": True,
+                    "updated_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        # Broadcast to everyone
+        await sio.emit("message_updated", {
+            "id": message_id,
+            "content": new_content,
+            "is_edited": True,
+            "chat_id": chat_id,
+            "group_id": group_id
+        }, room=room)
+
+    except Exception as e:
+        logger.error(f"Error in edit_message: {e}", exc_info=True)

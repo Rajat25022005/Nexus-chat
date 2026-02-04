@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 from app.auth.service import hash_password, verify_password, create_access_token
 from app.core.mongo import get_db

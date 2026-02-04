@@ -16,7 +16,8 @@ async def process_chat_message(
     chat_id: str,
     user_email: str,
     user_name: str | None = None,
-    history: list = []
+    history: list = [],
+    reply_to_context: str | None = None
 ):
     """
     Core RAG logic for processing chat messages.
@@ -79,7 +80,8 @@ async def process_chat_message(
             user_name=user_name if user_name else user_email,
             retrieved_docs=documents,
             chat_history=history,
-            group_members=group_members
+            group_members=group_members,
+            reply_to_context=reply_to_context
         )
 
         # 3. Generate Answer

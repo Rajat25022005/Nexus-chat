@@ -77,6 +77,7 @@ def build_prompt(
     retrieved_docs: List[Dict[str, Any]],
     chat_history: List[Any],
     group_members: List[str] = None,
+    reply_to_context: str = None
 ) -> str:
 
     group_members = group_members or []
@@ -115,6 +116,14 @@ def build_prompt(
 
     user_query = normalize_text(user_query)
 
+    reply_context_block = ""
+    if reply_to_context:
+        reply_context_block = f"""
+### REPLIED MESSAGE (User is replying to this)
+{reply_to_context}
+
+"""
+
     return f"""
 You are **Nexus AI**, an intelligent assistant in a **Multi-User Group Chat**.
 
@@ -134,7 +143,7 @@ Your personality:
 {context_block}
 
 ---
-
+{reply_context_block}
 ### Conversation History
 {history_block}
 

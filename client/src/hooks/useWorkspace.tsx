@@ -12,6 +12,12 @@ export type Message = {
   sender?: string
   sender_name?: string
   sender_image?: string
+  replyTo?: {
+    id: string
+    sender: string
+    content: string
+  }
+  is_deleted?: boolean
 }
 
 export type Chat = {
@@ -186,12 +192,14 @@ export function useWorkspace() {
                     messages: [
                       ...chat.messages,
                       {
-                        id: crypto.randomUUID(),
+                        id: msg.id || crypto.randomUUID(), // Use backend ID if available
                         role: msg.role,
                         content: msg.content,
                         sender: msg.sender,
                         sender_name: msg.sender_name,
-                        sender_image: msg.sender_image
+                        sender_image: msg.sender_image,
+                        replyTo: msg.replyTo,
+                        is_deleted: msg.is_deleted
                       },
                     ],
                   }
@@ -203,12 +211,53 @@ export function useWorkspace() {
       )
     }
 
+    function onMessageDeleted(data: { id: string, type: "everyone" | "me" }) {
+      console.log("WS: Message Deleted", data)
+      setGroups(prev => prev.map(group => ({
+        ...group,
+        chats: group.chats.map(chat => ({
+          ...chat,
+          messages: data.type === "everyone"
+            ? chat.messages.map(m => m.id === data.id || m.id.endsWith(data.id) ? { ...m, content: "This message was deleted", is_deleted: true, replyTo: undefined } : m)
+            : chat.messages.filter(m => m.id !== data.id && !m.id.endsWith(data.id)) // For "me", remove it. Note: ID matching might be tricky if using randomUUID locally?
+          // Wait, locally generated ID vs DB ID. 
+          // The backend uses DB ID. The frontend uses crypto.randomUUID for *optimistic* rendering but replaces it?
+          // Actually, the current `onNewMessage` uses crypto.randomUUID for incoming messages too! This is a problem for matching IDs.
+          // FIX: We need to use the ID from the backend if available.
+          // However, for this task, I will assume the ID passed back corresponds to something we can match. 
+          // BUT `fetchMessages` maps DB `_id` to `id`? No, it generates randomUUID too in `loadHistory`.
+          // CRITICAL ISSUE: We don't have stable IDs on frontend.
+          // I will assume for now that I need to RELOAD the chat to sync or try to fuzzy match? 
+          // No, I can't match random UUIDs. 
+          // Workaround: Reload chat on delete for now to ensure consistency, OR update `loadHistory` to use real IDs.
+          // Let's check `loadHistory` again. It uses `crypto.randomUUID()`.
+          // I MUST update `loadHistory` to use the real ID from DB if I want to support deletion.
+        }))
+      })))
+
+      // Force reload for now to ensure sync until ID refactor
+      // Actually, I'll do a quick refactor of loadHistory to use `_id` from DB as `id`.
+    }
+
     function onTyping() {
       setIsTyping(true)
       setTimeout(() => setIsTyping(false), 1500)
     }
 
+    function onMessageUpdated(data: { id: string, content: string, is_edited: boolean, chat_id: string, group_id: string }) {
+      setGroups(prev => prev.map(group => group.id === data.group_id ? {
+        ...group,
+        chats: group.chats.map(chat => chat.id === data.chat_id ? {
+          ...chat,
+          messages: chat.messages.map(m => m.id === data.id || m.id.endsWith(data.id) ? { ...m, content: data.content } : m)
+          // Note: Adding is_edited visual later if needed, user just asked for edit feature.
+        } : chat)
+      } : group))
+    }
+
     socket.on("new_message", onNewMessage)
+    socket.on("message_deleted", onMessageDeleted)
+    socket.on("message_updated", onMessageUpdated)
     socket.on("typing", onTyping)
 
     // Re-join room to ensure we are subscribed to the correct channel
@@ -220,6 +269,7 @@ export function useWorkspace() {
 
     return () => {
       socket.off("new_message", onNewMessage)
+      socket.off("message_deleted", onMessageDeleted)
       socket.off("typing", onTyping)
       socket.emit("leave_room", {
         group_id: activeGroupId,
@@ -248,12 +298,14 @@ export function useWorkspace() {
                     ? {
                       ...chat,
                       messages: data.map((m: any) => ({
-                        id: crypto.randomUUID(),
+                        id: m._id || m.id || crypto.randomUUID(), // Use DB ID if available
                         role: m.role,
                         content: m.content,
                         sender: m.sender || m.user_id,
                         sender_name: m.sender_name,
-                        sender_image: m.sender_image
+                        sender_image: m.sender_image,
+                        replyTo: m.replyTo,
+                        is_deleted: m.is_deleted
                       })),
                     }
                     : chat
@@ -274,7 +326,7 @@ export function useWorkspace() {
 
   // SEND MESSAGE (OPTIMISTIC)
   // SEND MESSAGE (OPTIMISTIC)
-  const sendMessage = (text: string, triggerAi: boolean = false) => {
+  const sendMessage = (text: string, triggerAi: boolean = false, replyTo?: Message['replyTo']) => {
     if (!text.trim()) return
 
     setGroups(prev =>
@@ -293,7 +345,8 @@ export function useWorkspace() {
                       role: "user",
                       content: text,
                       sender: userEmail,
-                      sender_image: profileImage || undefined
+                      sender_image: profileImage || undefined,
+                      replyTo
                     },
                   ],
                 }
@@ -309,7 +362,65 @@ export function useWorkspace() {
       chat_id: activeChatId,
       content: text,
       trigger_ai: triggerAi,
+      replyTo
     })
+  }
+
+  const deleteMessage = (messageId: string, type: "everyone" | "me") => {
+    socket.emit("delete_message", {
+      message_id: messageId,
+      delete_type: type,
+      group_id: activeGroupId,
+      chat_id: activeChatId
+    })
+    // Optimistic update
+    setGroups(prev => prev.map(group =>
+      group.id === activeGroupId
+        ? {
+          ...group,
+          chats: group.chats.map(chat =>
+            chat.id === activeChatId
+              ? {
+                ...chat,
+                messages: type === "everyone"
+                  ? chat.messages.map(m => m.id === messageId ? { ...m, content: "This message was deleted", is_deleted: true, replyTo: undefined } : m)
+                  : chat.messages.filter(m => m.id !== messageId)
+              }
+              : chat
+          )
+        }
+        : group
+    ))
+  }
+
+  const editMessage = (messageId: string, content: string) => {
+    socket.emit("edit_message", {
+      message_id: messageId,
+      content: content,
+      group_id: activeGroupId,
+      chat_id: activeChatId
+    })
+
+    // Optimistic update
+    setGroups(prev => prev.map(group =>
+      group.id === activeGroupId
+        ? {
+          ...group,
+          chats: group.chats.map(chat =>
+            chat.id === activeChatId
+              ? {
+                ...chat,
+                messages: chat.messages.map(m =>
+                  m.id === messageId
+                    ? { ...m, content: content }
+                    : m
+                )
+              }
+              : chat
+          )
+        }
+        : group
+    ))
   }
 
   // Handle Join Group Logic
@@ -539,6 +650,8 @@ export function useWorkspace() {
     joinGroup: joinGroupRefactored,
     leaveGroup,
     removeMember,
+    deleteMessage,
+    editMessage,
     userEmail,
     username,
     profileImage
