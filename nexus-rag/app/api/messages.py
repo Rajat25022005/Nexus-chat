@@ -18,6 +18,7 @@ def get_chat_messages(
         {
             "group_id": group_id,
             "chat_id": chat_id,
+            "deleted_for": {"$ne": user["email"]}
         }
     ).sort("created_at", 1)
 

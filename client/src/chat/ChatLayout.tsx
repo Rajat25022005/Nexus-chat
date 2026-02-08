@@ -31,7 +31,30 @@ export default function ChatLayout() {
     leaveGroup,
     removeMember,
     profileImage,
+    deleteMessage,
+    editMessage
   } = useWorkspace()
+
+  /* Reply State */
+  const [replyingTo, setReplyingTo] = useState<any | null>(null) // Using any temporarily to avoid import cycle if needed, but optimally Message
+
+  const handleReply = (message: any) => {
+    setReplyingTo(message)
+  }
+
+  const cancelReply = () => {
+    setReplyingTo(null)
+  }
+
+  /* Wrap sendMessage to include replyTo if existing */
+  const handleSend = (text: string, triggerAi: boolean) => {
+    sendMessage(text, triggerAi, replyingTo ? {
+      id: replyingTo.id,
+      sender: replyingTo.sender_name || replyingTo.sender,
+      content: replyingTo.content
+    } : undefined)
+    setReplyingTo(null)
+  }
 
   return (
     <ErrorBoundary>
@@ -57,8 +80,21 @@ export default function ChatLayout() {
             onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
             onOpenDetails={() => setShowGroupDetails(true)}
           />
-          <MessageList messages={activeChat.messages} isTyping={isTyping} userEmail={userEmail} userImage={profileImage} />
-          <MessageInput onSend={sendMessage} disabled={isTyping} />
+          <MessageList
+            messages={activeChat.messages}
+            isTyping={isTyping}
+            userEmail={userEmail}
+            userImage={profileImage}
+            onReply={handleReply}
+            onDelete={deleteMessage}
+            onEdit={editMessage}
+          />
+          <MessageInput
+            onSend={handleSend}
+            disabled={isTyping}
+            replyingTo={replyingTo}
+            onCancelReply={cancelReply}
+          />
         </div>
 
         {/* Group Details Modal */}
