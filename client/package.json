@@ -13,7 +13,7 @@
     "@types/react-syntax-highlighter": "^15.5.13",
     "axios": "^1.13.2",
     "clsx": "^2.1.1",
-    "framer-motion": "^12.30.0",
+    "framer-motion": "^12.34.0",
     "jwt-decode": "^4.0.0",
     "lucide-react": "^0.562.0",
     "react": "^19.2.0",
