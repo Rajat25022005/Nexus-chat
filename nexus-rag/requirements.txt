@@ -22,4 +22,4 @@ python-multipart
 authlib
 itsdangerous
 httpx
-dnspython>=2.6.0
+dnspython>=2.8.0
