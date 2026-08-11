@@ -8,7 +8,7 @@
     "dev": "node --watch src/index.js"
   },
   "dependencies": {
-    "@google-cloud/pubsub": "^4.11.0",
+    "@google-cloud/pubsub": "^6.0.0",
     "@socket.io/redis-adapter": "^8.3.0",
     "dotenv": "^16.4.0",
     "jsonwebtoken": "^9.0.3",
