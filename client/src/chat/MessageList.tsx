@@ -6,6 +6,7 @@ import type { Message } from "../types"
 type Props = {
   messages: Message[]
   isTyping: boolean
+  typingUser?: { name: string; isAi: boolean } | null
   streamingMessageId: string | null
   userEmail: string
   userImage: string | null
@@ -31,6 +32,7 @@ function MessageSkeleton() {
 const MessageList = memo(function MessageList({
   messages,
   isTyping,
+  typingUser,
   streamingMessageId,
   userEmail,
   userImage,
@@ -62,7 +64,7 @@ const MessageList = memo(function MessageList({
         bottomRef.current?.scrollIntoView({ behavior: "smooth" })
       }
     }
-  }, [messages, isTyping, streamingMessageId])
+  }, [messages, isTyping, typingUser, streamingMessageId])
 
   return (
     <div
@@ -102,11 +104,19 @@ const MessageList = memo(function MessageList({
           />
         ))}
 
-        {isTyping && !streamingMessageId && (
+        {(isTyping || typingUser) && !streamingMessageId && (
           <div className="flex items-center gap-3 pl-12 py-2">
             <div className="flex items-center gap-2 bg-nexus-card/70 backdrop-blur-md px-4 py-2.5 rounded-2xl rounded-tl-sm border border-nexus-border/20">
-              <Sparkles className="w-3.5 h-3.5 text-nexus-primary/70 animate-pulse" />
-              <span className="text-xs text-nexus-muted/70">Nexus AI is thinking</span>
+              {typingUser?.isAi !== false ? (
+                <>
+                  <Sparkles className="w-3.5 h-3.5 text-nexus-primary/70 animate-pulse" />
+                  <span className="text-xs text-nexus-muted/70">Nexus AI is thinking</span>
+                </>
+              ) : (
+                <span className="text-xs text-nexus-muted/80 font-medium italic">
+                  {typingUser?.name || "Someone"} is typing
+                </span>
+              )}
               <span className="flex items-center gap-1">
                 <span
                   className="w-1 h-1 bg-nexus-primary/60 rounded-full animate-bounce"

@@ -5,6 +5,7 @@ import { useThemeStore } from "../stores/themeStore"
 type Props = {
   title: string
   groupName: string
+  typingUser?: { name: string; isAi: boolean } | null
   onToggleSidebar: () => void
   onToggleInfo: () => void
   onOpenDetails: () => void
@@ -14,6 +15,7 @@ type Props = {
 const ChatHeader = memo(function ChatHeader({
   title,
   groupName,
+  typingUser,
   onToggleSidebar,
   onToggleInfo,
   onOpenDetails,
@@ -38,9 +40,13 @@ const ChatHeader = memo(function ChatHeader({
           <p className="font-semibold text-sm leading-tight truncate max-w-[200px] sm:max-w-[300px]">
             {title || "Chat"}
           </p>
-          {groupName && (
+          {typingUser ? (
+            <p className="text-[11px] text-nexus-primary font-medium animate-pulse truncate">
+              {typingUser.isAi ? "Nexus AI is thinking..." : `${typingUser.name} is typing...`}
+            </p>
+          ) : groupName ? (
             <p className="text-[11px] text-nexus-muted truncate">{groupName}</p>
-          )}
+          ) : null}
         </div>
       </div>
 

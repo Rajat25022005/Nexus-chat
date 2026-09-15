@@ -3,7 +3,9 @@ import { useNavigate } from "react-router-dom"
 import { useAuthStore } from "../stores/authStore"
 import { useWorkspace } from "../context/WorkspaceContext"
 import { updateProfile, getProfile, uploadAvatar } from "../api/auth"
+import { uploadFile } from "../api/files"
 import { getImageUrl } from "../api/config"
+import { validateAvatarFile } from "../lib/fileSecurity"
 import { ArrowLeft, Camera, User, Check } from "lucide-react"
 import NexusButton from "../components/ui/NexusButton"
 import NexusInput from "../components/ui/NexusInput"
@@ -78,15 +80,44 @@ export default function Profile() {
     const file = e.target.files?.[0]
     if (!file || !token) return
 
+    // Enforce client-side file security validation (size <= 5MB, raster MIME only, no SVGs)
+    const validation = validateAvatarFile(file)
+    if (!validation.valid) {
+      setError(validation.error || "Invalid image file")
+      e.target.value = ""
+      return
+    }
+
+    // Instant local preview
+    const previewUrl = URL.createObjectURL(file)
+    const previousImage = profileImage
+    setProfileImage(previewUrl)
     setImageLoading(true)
     setError("")
+
     try {
-      const data = await uploadAvatar(file)
-      setProfileImage(`${data.profile_image}?t=${Date.now()}`)
-    } catch {
-      setError("Failed to upload image")
+      let finalAvatarUrl = ""
+      try {
+        // Try S3 pre-signed 2-phase upload
+        const uploadRes = await uploadFile({ file, purpose: "avatar" })
+        finalAvatarUrl = uploadRes.download_url || uploadRes.url || ""
+      } catch (s3Err) {
+        console.warn("S3 presign avatar upload fallback to multipart:", s3Err)
+        // Fallback to avatar upload adapter endpoint
+        const data = await uploadAvatar(file)
+        finalAvatarUrl = data.profile_image || data.avatar_url || ""
+      }
+
+      if (finalAvatarUrl) {
+        setProfileImage(`${finalAvatarUrl}?t=${Date.now()}`)
+        setSuccess("Avatar updated successfully")
+      }
+    } catch (err: unknown) {
+      setProfileImage(previousImage)
+      setError(err instanceof Error ? err.message : "Failed to upload image")
     } finally {
       setImageLoading(false)
+      e.target.value = ""
     }
   }
 
@@ -126,7 +157,13 @@ export default function Profile() {
             </div>
             <label className="absolute bottom-0 right-0 bg-nexus-primary p-2 rounded-full cursor-pointer hover:brightness-110 transition-all shadow-lg group-hover:scale-110">
               <Camera className="w-3.5 h-3.5 text-white" />
-              <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} disabled={imageLoading} />
+              <input
+                type="file"
+                className="hidden"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                onChange={handleImageUpload}
+                disabled={imageLoading}
+              />
             </label>
           </div>
         </div>

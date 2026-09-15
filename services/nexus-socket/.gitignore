@@ -1,0 +1,115 @@
+# ─── Elixir / Mix ─────────────────────────────────────────────────────────────
+
+# Build artifacts
+/_build/
+
+# Mix dependency sources
+/deps/
+
+# Generated documentation
+/doc/
+
+# Mix lock file is intentionally committed, but exclude the local override
+/mix.lock.local
+
+# Cover reports
+/cover/
+
+# Elixir release output
+/rel/
+/_rel/
+
+# Dialyzer PLT files
+/priv/plts/
+*.plt
+*.plt.hash
+
+# ExUnit test coverage artifacts
+/cover/
+
+# Crash dumps from BEAM runtime
+erl_crash.dump
+*.crashdump
+
+# ─── Phoenix / Bandit ─────────────────────────────────────────────────────────
+
+# Phoenix static asset manifests (if any frontend build is added later)
+/priv/static/assets/
+/priv/static/*.js
+/priv/static/*.css
+
+# ─── Environment & Secrets ────────────────────────────────────────────────────
+
+# Local environment overrides — NEVER commit secrets
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Runtime secret files
+secret_key_base
+jwt_secret
+
+# ─── IDE & Editor ─────────────────────────────────────────────────────────────
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# JetBrains (IntelliJ, Elixir plugin)
+.idea/
+*.iml
+
+# Vim / Neovim
+*.swp
+*.swo
+*~
+.netrwhist
+
+# Emacs
+*#
+.\#*
+.dir-locals-2.el
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# ─── Operating System ─────────────────────────────────────────────────────────
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ─── Docker & Container ───────────────────────────────────────────────────────
+
+# Local Docker override files
+docker-compose.override.yml
+docker-compose.local.yml
+
+# ─── Test & CI Artifacts ──────────────────────────────────────────────────────
+
+# ExUnit HTML test reports (if html formatter is configured)
+test/reports/
+/reports/
+
+# ─── Agent Metadata ───────────────────────────────────────────────────────────
+
+# Teamwork / Antigravity agent working directories
+.agents/

@@ -1,6 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from "react"
-import { Sparkles, Send, X } from "lucide-react"
+import { Sparkles, Send, X, Paperclip, Loader2 } from "lucide-react"
+import { socket } from "../socket"
 import SlashCommandMenu, { getFilteredCommands, type SlashCommand } from "./SlashCommandMenu"
+import { uploadFile } from "../api/files"
 import type { Message } from "../types"
 
 type Props = {
@@ -8,13 +10,88 @@ type Props = {
   disabled?: boolean
   replyingTo?: Message | null
   onCancelReply?: () => void
+  chatId?: string
+  groupId?: string
 }
 
-export default function MessageInput({ onSend, disabled, replyingTo, onCancelReply }: Props) {
+function formatBytes(bytes: number, decimals = 1) {
+  if (bytes === 0) return "0 B"
+  const k = 1024
+  const dm = decimals < 0 ? 0 : decimals
+  const sizes = ["B", "KB", "MB", "GB"]
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i]
+}
+
+const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024 // 50MB
+
+export default function MessageInput({ onSend, disabled, replyingTo, onCancelReply, chatId, groupId }: Props) {
   const [text, setText] = useState("")
   const [slashIndex, setSlashIndex] = useState(0)
   const [helpVisible, setHelpVisible] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [attachment, setAttachment] = useState<{
+    name: string
+    url: string
+    contentType: string
+    size: number
+  } | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isTypingActiveRef = useRef(false)
+
+  // Cleanup typing indicator when switching chats or unmounting
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+        typingTimeoutRef.current = null
+      }
+      if (isTypingActiveRef.current && chatId) {
+        isTypingActiveRef.current = false
+        socket.emit("typing_stop", { chatId, groupId })
+      }
+    }
+  }, [chatId, groupId])
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const nextVal = e.target.value
+    setText(nextVal)
+
+    if (!chatId) return
+
+    if (nextVal.trim().length > 0) {
+      if (!isTypingActiveRef.current) {
+        isTypingActiveRef.current = true
+        socket.emit("typing_start", { chatId, groupId })
+      }
+
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+
+      typingTimeoutRef.current = setTimeout(() => {
+        if (isTypingActiveRef.current) {
+          isTypingActiveRef.current = false
+          socket.emit("typing_stop", { chatId, groupId })
+        }
+        typingTimeoutRef.current = null
+      }, 1500)
+    } else {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+        typingTimeoutRef.current = null
+      }
+      if (isTypingActiveRef.current) {
+        isTypingActiveRef.current = false
+        socket.emit("typing_stop", { chatId, groupId })
+      }
+    }
+  }
 
   // Derived slash command state
   const isSlashCommand = text.startsWith("/") && text.indexOf(" ") === -1
@@ -35,24 +112,87 @@ export default function MessageInput({ onSend, disabled, replyingTo, onCancelRep
     if (replyingTo) textareaRef.current?.focus()
   }, [replyingTo])
 
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (file.size > MAX_ATTACHMENT_SIZE) {
+      setUploadError("File exceeds 50MB maximum allowed limit")
+      e.target.value = ""
+      return
+    }
+
+    setUploading(true)
+    setUploadProgress(0)
+    setUploadError(null)
+
+    try {
+      const res = await uploadFile({
+        file,
+        purpose: "attachment",
+        chatId: chatId || undefined,
+        onProgress: (pct) => setUploadProgress(pct),
+      })
+
+      const finalUrl = res.download_url || res.url
+      if (!finalUrl) throw new Error("Upload did not return a valid download URL")
+
+      setAttachment({
+        name: res.file_name || file.name,
+        url: finalUrl,
+        contentType: res.content_type || file.type || "application/octet-stream",
+        size: res.size_bytes || file.size,
+      })
+    } catch (err: unknown) {
+      console.error("Attachment upload failed", err)
+      setUploadError(err instanceof Error ? err.message : "Failed to upload file")
+    } finally {
+      setUploading(false)
+      e.target.value = ""
+    }
+  }
+
   const handleSend = useCallback(
     (triggerAi: boolean) => {
-      if (!text.trim()) return
+      const trimmedText = text.trim()
+      if (!trimmedText && !attachment) return
       if (triggerAi && disabled) return
-      onSend(text, triggerAi)
+
+      let messagePayload = trimmedText
+      if (attachment) {
+        const isImage =
+          attachment.contentType.startsWith("image/") ||
+          /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(attachment.name)
+        const markdown = isImage
+          ? `![${attachment.name}](${attachment.url})`
+          : `[${attachment.name}](${attachment.url})`
+
+        messagePayload = trimmedText ? `${trimmedText}\n\n${markdown}` : markdown
+      }
+
+      onSend(messagePayload, triggerAi)
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+        typingTimeoutRef.current = null
+      }
+      if (isTypingActiveRef.current && chatId) {
+        isTypingActiveRef.current = false
+        socket.emit("typing_stop", { chatId, groupId })
+      }
       setText("")
+      setAttachment(null)
+      setUploadError(null)
       setHelpVisible(false)
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto"
       }
     },
-    [text, disabled, onSend]
+    [text, attachment, disabled, onSend, chatId, groupId]
   )
 
   const handleSlashSelect = useCallback(
     (command: SlashCommand) => {
       if (command.action === "local") {
-        // /help — show inline help card
         setHelpVisible(true)
         setText("")
         return
@@ -60,12 +200,9 @@ export default function MessageInput({ onSend, disabled, replyingTo, onCancelRep
 
       if (command.template) {
         if (command.template.includes("{input}")) {
-          // Commands that need user input (explain, code, translate, goal)
-          // Set the command prefix so user can continue typing
           setText((command.command.startsWith("/") ? command.command : "/" + command.command) + " ")
           textareaRef.current?.focus()
         } else {
-          // Commands that fire immediately (summarize)
           onSend(command.template, true)
           setText("")
         }
@@ -104,7 +241,6 @@ export default function MessageInput({ onSend, disabled, replyingTo, onCancelRep
 
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault()
-        // If text starts with a slash command that needs input, send as AI
         if (text.startsWith("/")) {
           const parts = text.split(" ")
           const rawCmd = parts[0].toLowerCase()
@@ -112,7 +248,9 @@ export default function MessageInput({ onSend, disabled, replyingTo, onCancelRep
           const cmdWithoutSlash = rawCmd.startsWith("/") ? rawCmd.slice(1) : rawCmd
           const userInput = parts.slice(1).join(" ").trim()
           const allCommands = getFilteredCommands("")
-          const matched = allCommands.find((c) => c.command.toLowerCase() === cmdWithSlash || c.command.toLowerCase() === cmdWithoutSlash)
+          const matched = allCommands.find(
+            (c) => c.command.toLowerCase() === cmdWithSlash || c.command.toLowerCase() === cmdWithoutSlash
+          )
 
           if (matched && matched.action === "ai" && matched.template && userInput) {
             const prompt = matched.template.replace("{input}", userInput)
@@ -125,7 +263,7 @@ export default function MessageInput({ onSend, disabled, replyingTo, onCancelRep
         handleSend(false)
       }
     },
-    [slashActive, slashFilter, slashIndex, handleSlashSelect, text, onSend, handleSend]
+    [slashActive, slashFilter, slashIndex, handleSlashSelect, text, handleSend, onSend]
   )
 
   return (
@@ -149,7 +287,9 @@ export default function MessageInput({ onSend, disabled, replyingTo, onCancelRep
               <div key={cmd.command} className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-nexus-surface/50">
                 <span className="text-nexus-primary/70">{cmd.icon}</span>
                 <div>
-                  <span className="text-xs font-mono font-semibold text-nexus-text/80">{cmd.command.startsWith("/") ? cmd.command : "/" + cmd.command}</span>
+                  <span className="text-xs font-mono font-semibold text-nexus-text/80">
+                    {cmd.command.startsWith("/") ? cmd.command : "/" + cmd.command}
+                  </span>
                   <span className="text-[10px] text-nexus-muted/60 ml-1.5">{cmd.description}</span>
                 </div>
               </div>
@@ -179,6 +319,56 @@ export default function MessageInput({ onSend, disabled, replyingTo, onCancelRep
         </div>
       )}
 
+      {/* Upload error banner */}
+      {uploadError && (
+        <div className="mb-2 flex items-center justify-between text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-xl animate-[slideDown_0.2s_ease-out]">
+          <span>{uploadError}</span>
+          <button type="button" onClick={() => setUploadError(null)} className="p-0.5 hover:text-red-300">
+            <X size={12} />
+          </button>
+        </div>
+      )}
+
+      {/* Uploading progress pill */}
+      {uploading && (
+        <div className="mb-2 flex items-center gap-2 text-xs bg-nexus-card border border-nexus-border/60 px-3 py-2 rounded-xl shadow-sm animate-[slideDown_0.2s_ease-out]">
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-nexus-primary" />
+          <span className="text-nexus-muted">Uploading attachment...</span>
+          <span className="font-semibold text-nexus-primary ml-auto">{uploadProgress}%</span>
+        </div>
+      )}
+
+      {/* Uploaded attachment preview pill */}
+      {attachment && !uploading && (
+        <div className="mb-2 flex items-center justify-between gap-2 text-xs bg-nexus-card border border-nexus-primary/30 px-3 py-2 rounded-xl shadow-sm animate-[slideDown_0.2s_ease-out]">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-nexus-primary/10 text-nexus-primary flex items-center justify-center shrink-0 overflow-hidden">
+              {attachment.contentType.startsWith("image/") ? (
+                <img src={attachment.url} alt={attachment.name} className="w-full h-full object-cover" />
+              ) : (
+                <Paperclip className="w-3.5 h-3.5" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-nexus-text truncate max-w-[200px] sm:max-w-[320px]">
+                {attachment.name}
+              </p>
+              <p className="text-[10px] text-nexus-muted">
+                {formatBytes(attachment.size)} · Ready to send
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAttachment(null)}
+            className="p-1.5 hover:bg-nexus-hover rounded-lg text-nexus-muted hover:text-nexus-text transition-colors"
+            aria-label="Remove attachment"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       <div className="relative flex items-end gap-2">
         {/* Slash command menu */}
         <SlashCommandMenu
@@ -189,12 +379,41 @@ export default function MessageInput({ onSend, disabled, replyingTo, onCancelRep
           visible={slashActive}
         />
 
+        {/* Paperclip attachment button */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.tar,.gz,audio/*,video/*"
+          onChange={handleFileSelect}
+          disabled={disabled || uploading}
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={disabled || uploading}
+          aria-label="Attach file"
+          className="
+            min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl border border-nexus-border
+            bg-nexus-card text-nexus-muted hover:text-nexus-text hover:bg-nexus-hover
+            active:scale-95 transition-all duration-150
+            disabled:opacity-40 disabled:cursor-not-allowed
+          "
+          title="Attach file (max 50MB)"
+        >
+          {uploading ? (
+            <Loader2 className="w-4 h-4 animate-spin text-nexus-primary" />
+          ) : (
+            <Paperclip className="w-4 h-4" />
+          )}
+        </button>
+
         <textarea
           ref={textareaRef}
           value={text}
           rows={1}
           aria-label="Type a message"
-          onChange={(e) => setText(e.target.value)}
+          onChange={handleTextChange}
           onKeyDown={handleKeyDown}
           placeholder="Type a message... (/ for commands)"
           className="
@@ -213,7 +432,7 @@ export default function MessageInput({ onSend, disabled, replyingTo, onCancelRep
         <button
           type="button"
           onClick={() => handleSend(true)}
-          disabled={disabled || !text.trim()}
+          disabled={disabled || (!text.trim() && !attachment)}
           aria-label="Ask AI assistant"
           className="
             flex items-center justify-center gap-1.5 rounded-xl border border-nexus-primary/25
@@ -233,7 +452,7 @@ export default function MessageInput({ onSend, disabled, replyingTo, onCancelRep
         <button
           type="button"
           onClick={() => handleSend(false)}
-          disabled={!text.trim()}
+          disabled={(!text.trim() && !attachment) || uploading}
           aria-label="Send message"
           className="
             rounded-xl bg-nexus-primary min-h-[44px] min-w-[44px] flex items-center justify-center px-3.5 py-2.5

@@ -1,7 +1,7 @@
-import { create } from "zustand"
+import { create, type StoreApi, type UseBoundStore } from "zustand"
 import type { Toast, ToastType } from "../components/ui/NexusToast"
 
-interface ToastStore {
+export interface ToastStore {
   toasts: Toast[]
   addToast: (message: string, type?: ToastType) => string
   dismissToast: (id: string) => void
@@ -10,26 +10,26 @@ interface ToastStore {
   info: (message: string) => string
 }
 
-export const useToastStore = create<ToastStore>((set) => ({
+export const useToastStore: UseBoundStore<StoreApi<ToastStore>> = create<ToastStore>((set, get) => ({
   toasts: [],
-  addToast: (message, type = "info") => {
+  addToast: (message: string, type: ToastType = "info"): string => {
     const id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2)
-    set((s) => ({ toasts: [...s.toasts, { id, message, type }] }))
+    set((s: ToastStore) => ({ toasts: [...s.toasts, { id, message, type }] }))
     return id
   },
-  dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
-  success: (msg) => useToastStore.getState().addToast(msg, "success"),
-  error: (msg) => useToastStore.getState().addToast(msg, "error"),
-  info: (msg) => useToastStore.getState().addToast(msg, "info"),
+  dismissToast: (id: string): void => set((s: ToastStore) => ({ toasts: s.toasts.filter((t: Toast) => t.id !== id) })),
+  success: (msg: string): string => get().addToast(msg, "success"),
+  error: (msg: string): string => get().addToast(msg, "error"),
+  info: (msg: string): string => get().addToast(msg, "info"),
 }))
 
 export function useToast() {
-  const toasts = useToastStore((state) => state.toasts)
-  const addToast = useToastStore((state) => state.addToast)
-  const dismissToast = useToastStore((state) => state.dismissToast)
-  const success = useToastStore((state) => state.success)
-  const error = useToastStore((state) => state.error)
-  const info = useToastStore((state) => state.info)
+  const toasts = useToastStore((state: ToastStore) => state.toasts)
+  const addToast = useToastStore((state: ToastStore) => state.addToast)
+  const dismissToast = useToastStore((state: ToastStore) => state.dismissToast)
+  const success = useToastStore((state: ToastStore) => state.success)
+  const error = useToastStore((state: ToastStore) => state.error)
+  const info = useToastStore((state: ToastStore) => state.info)
 
   return { toasts, addToast, dismissToast, success, error, info }
 }

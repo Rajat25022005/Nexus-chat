@@ -1,21 +1,17 @@
 import { useState, useCallback, useEffect } from "react"
-import { useNavigate } from "react-router-dom"
 import Sidebar from "./Sidebar"
 import ChatHeader from "./ChatHeader"
 import MessageList from "./MessageList"
 import MessageInput from "./MessageInput"
 import ThreadPanel from "./ThreadPanel"
 import { useWorkspace } from "../context/WorkspaceContext"
-import { useAuthStore } from "../stores/authStore"
+import { useCommandPaletteStore } from "../stores/commandPaletteStore"
 import { ErrorBoundary } from "../components/ErrorBoundary"
 import GroupDetailsModal from "../components/GroupDetailsModal"
-import CommandPalette from "../components/CommandPalette"
-import Modal from "../components/Modal"
+import UserSearchModal from "../components/UserSearchModal"
 import type { Message } from "../types"
 
 export default function ChatLayout() {
-  const navigate = useNavigate()
-  const { logout } = useAuthStore()
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth > 768 : true
@@ -23,10 +19,8 @@ export default function ChatLayout() {
   const [isInfoOpen, setIsInfoOpen] = useState(false)
   const [showGroupDetails, setShowGroupDetails] = useState(false)
   const [replyingTo, setReplyingTo] = useState<Message | null>(null)
-  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
+  const [isUserSearchOpen, setIsUserSearchOpen] = useState(false)
   const [activeThread, setActiveThread] = useState<Message | null>(null)
-  const [paletteModal, setPaletteModal] = useState<"group" | "chat" | "join" | null>(null)
-  const [paletteInput, setPaletteInput] = useState("")
 
   useEffect(() => {
     const handleResize = () => {
@@ -37,18 +31,6 @@ export default function ChatLayout() {
     }
     window.addEventListener("resize", handleResize)
     return () => window.removeEventListener("resize", handleResize)
-  }, [])
-
-  // Global ⌘K / Ctrl+K shortcut
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault()
-        setIsCommandPaletteOpen((prev) => !prev)
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
   }, [])
 
   // Lock body scroll when mobile thread drawer is open
@@ -70,12 +52,16 @@ export default function ChatLayout() {
 
   const {
     groups,
+    directChats,
     activeChat,
     activeGroup,
     activeGroupId,
     activeChatId,
     setActiveGroupId,
     setActiveChatId,
+    createOrOpenDirectChat,
+    selectDirectChat,
+    deleteDirectChat,
     isTyping,
     isLoading,
     streamingMessageId,
@@ -94,6 +80,8 @@ export default function ChatLayout() {
     reactToMessage,
     sendThreadReply,
     loadThreadMessages,
+    typingUser,
+    onlineUserIds,
   } = useWorkspace()
 
   const [isThreadLoading, setIsThreadLoading] = useState(false)
@@ -107,10 +95,10 @@ export default function ChatLayout() {
   }, [])
 
   const handleSend = useCallback(
-    (text: string, triggerAi: boolean) => {
+    (text: string, triggerAi?: boolean) => {
       sendMessage(
         text,
-        triggerAi,
+        triggerAi ?? false,
         replyingTo
           ? {
               id: replyingTo.id,
@@ -169,60 +157,7 @@ export default function ChatLayout() {
   }, [isInfoOpen])
   const openDetails = useCallback(() => setShowGroupDetails(true), [])
   const closeDetails = useCallback(() => setShowGroupDetails(false), [])
-  const openCommandPalette = useCallback(() => setIsCommandPaletteOpen(true), [])
-  const closeCommandPalette = useCallback(() => setIsCommandPaletteOpen(false), [])
-
-  // Command palette actions
-  const handleCommandPaletteAction = useCallback(
-    (action: string) => {
-      if (action === "logout") {
-        logout()
-        navigate("/login")
-      } else if (action === "new-chat") {
-        setPaletteModal("chat")
-        setPaletteInput("")
-      } else if (action === "new-group") {
-        setPaletteModal("group")
-        setPaletteInput("")
-      } else if (action === "join-group") {
-        setPaletteModal("join")
-        setPaletteInput("")
-      }
-    },
-    [logout, navigate]
-  )
-
-  const handlePaletteSubmit = useCallback(() => {
-    if (!paletteInput.trim()) return
-    if (paletteModal === "group") createGroup(paletteInput)
-    else if (paletteModal === "chat") createChat(paletteInput)
-    else if (paletteModal === "join") joinGroup(paletteInput)
-    setPaletteModal(null)
-    setPaletteInput("")
-  }, [paletteInput, paletteModal, createGroup, createChat, joinGroup])
-
-  const handleCommandPaletteNavigate = useCallback(
-    (path: string) => {
-      navigate(path)
-    },
-    [navigate]
-  )
-
-  const handleCommandPaletteSelectGroup = useCallback(
-    (groupId: string) => {
-      setActiveGroupId(groupId)
-      handleMobileAction()
-    },
-    [setActiveGroupId, handleMobileAction]
-  )
-
-  const handleCommandPaletteSelectChat = useCallback(
-    (chatId: string) => {
-      setActiveChatId(chatId)
-      handleMobileAction()
-    },
-    [setActiveChatId, handleMobileAction]
-  )
+  const openCommandPalette = useCommandPaletteStore((s) => s.open)
 
   return (
     <ErrorBoundary>
@@ -256,15 +191,20 @@ export default function ChatLayout() {
         >
           <Sidebar
             groups={groups}
+            directChats={directChats}
             activeGroupId={activeGroupId}
             activeChatId={activeChatId}
+            onlineUserIds={onlineUserIds}
             onSelectGroup={(id) => { setActiveGroupId(id); handleMobileAction() }}
             onSelectChat={(id) => { setActiveChatId(id); handleMobileAction() }}
+            onSelectDirectChat={(id) => { selectDirectChat(id); handleMobileAction() }}
+            onOpenUserSearch={() => setIsUserSearchOpen(true)}
             onNewGroup={(name) => { createGroup(name); handleMobileAction() }}
             onNewChat={(title) => { createChat(title); handleMobileAction() }}
             onJoinGroup={(id) => { joinGroup(id); handleMobileAction() }}
             onDeleteGroup={deleteGroup}
             onDeleteChat={deleteChat}
+            onDeleteDirectChat={deleteDirectChat}
             userEmail={userEmail}
           />
         </div>
@@ -273,7 +213,8 @@ export default function ChatLayout() {
         <main id="main-content" className="flex flex-1 flex-col min-w-0 relative z-10">
           <ChatHeader
             title={activeChat.title}
-            groupName={activeGroup?.name || ""}
+            groupName={directChats.some((dc) => dc.chat_id === activeChatId) ? "Direct Message" : (activeGroup?.name || "")}
+            typingUser={typingUser}
             onToggleSidebar={toggleSidebar}
             onToggleInfo={toggleInfo}
             onOpenDetails={openDetails}
@@ -291,6 +232,7 @@ export default function ChatLayout() {
             <MessageList
               messages={activeChat.messages}
               isTyping={isTyping}
+              typingUser={typingUser}
               streamingMessageId={streamingMessageId}
               userEmail={userEmail}
               userImage={profileImage}
@@ -307,6 +249,8 @@ export default function ChatLayout() {
             disabled={isTyping}
             replyingTo={replyingTo}
             onCancelReply={cancelReply}
+            chatId={activeChat.id}
+            groupId={activeGroupId || undefined}
           />
         </main>
 
@@ -419,66 +363,15 @@ export default function ChatLayout() {
           />
         )}
 
-        {/* Command Palette */}
-        <CommandPalette
-          isOpen={isCommandPaletteOpen}
-          onClose={closeCommandPalette}
-          groups={groups}
-          activeGroupId={activeGroupId}
-          onSelectGroup={handleCommandPaletteSelectGroup}
-          onSelectChat={handleCommandPaletteSelectChat}
-          onNavigate={handleCommandPaletteNavigate}
-          onAction={handleCommandPaletteAction}
+        {/* User Search Modal (Direct Messages) */}
+        <UserSearchModal
+          isOpen={isUserSearchOpen}
+          onClose={() => setIsUserSearchOpen(false)}
+          onSelectUser={(user) => {
+            createOrOpenDirectChat(user.id)
+            handleMobileAction()
+          }}
         />
-
-        {/* Palette Modal (New Chat / New Group / Join Group) */}
-        <Modal
-          isOpen={paletteModal !== null}
-          onClose={() => setPaletteModal(null)}
-          title={
-            paletteModal === "group" ? "Create Workspace" :
-            paletteModal === "chat" ? "New Channel" :
-            paletteModal === "join" ? "Join Group" : ""
-          }
-        >
-          <div className="flex flex-col gap-4">
-            {paletteModal === "join" && (
-              <p className="text-sm text-nexus-muted">Enter the invite code shared by the group admin (e.g. NX7K-Q2R9).</p>
-            )}
-            <input
-              autoFocus
-              type="text"
-              aria-label={
-                paletteModal === "group" ? "Group Name" :
-                paletteModal === "chat" ? "Chat Title" : "Invite Code"
-              }
-              className="w-full rounded-xl bg-nexus-bg border border-nexus-border px-4 py-3 text-nexus-text text-sm focus:border-nexus-primary/50 focus:outline-none focus:ring-[3px] focus:ring-nexus-primary/10 transition-all"
-              placeholder={
-                paletteModal === "group" ? "Group Name..." :
-                paletteModal === "chat" ? "Chat Title..." : "Invite Code (e.g. NX7K-Q2R9)"
-              }
-              value={paletteInput}
-              onChange={(e) => setPaletteInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handlePaletteSubmit()}
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setPaletteModal(null)}
-                className="px-4 py-2 rounded-xl text-sm text-nexus-muted hover:bg-nexus-bg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handlePaletteSubmit}
-                className="px-4 py-2 rounded-xl text-sm bg-nexus-primary text-white hover:brightness-110 transition-all font-medium"
-              >
-                {paletteModal === "join" ? "Join" : "Create"}
-              </button>
-            </div>
-          </div>
-        </Modal>
       </div>
     </ErrorBoundary>
   )

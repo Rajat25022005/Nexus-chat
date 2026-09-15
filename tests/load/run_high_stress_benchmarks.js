@@ -21,7 +21,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUTPUT_FILE = path.join(__dirname, 'benchmark_results.json');
 const HIGH_STRESS_OUTPUT_FILE = path.join(__dirname, 'high_stress_benchmark_results.json');
 
-const API_URL = process.env.API_URL || 'https://nexus-api-948116821095.us-central1.run.app';
+const API_URL = process.env.API_URL || 'http://localhost:8080';
 const TEST_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiOWM5OTAzM2UtY2FlNS00ZjcwLThmNDYtM2E3MWU1YzM0NDg3IiwiZW1haWwiOiJsb2FkdGVzdF9hZG1pbkBuZXh1cy50ZXN0IiwiaXNzIjoibmV4dXMtYXBpIiwiZXhwIjoxNzg3NTE1MzMzLCJpYXQiOjE3ODc0Mjg5MzN9.9PUplkAf8A_KwXEKguzoDMcfD-hQwnznsJFxLGbx1LY";
 const TEST_TENANT_ID = "a9188ed4-e624-42a9-ad5d-d98054373442";
 const TEST_CHAT_ID = "49215c84-c659-437c-a005-e68796cd9a3a";
@@ -83,7 +83,7 @@ async function runSingleStage(stage) {
     const start = performance.now();
     try {
       // 25s client timeout to prevent indefinite hanging on overloaded server connections
-      const res = await fetch(url, { 
+      const res = await fetch(url, {
         headers,
         signal: AbortSignal.timeout(25000)
       });

@@ -12,17 +12,24 @@ import apiClient from "../api/client"
 import { useSocket } from "../hooks/useSocket"
 import { useGroups } from "../hooks/useGroups"
 import { useMessages } from "../hooks/useMessages"
-import type { Message, Chat, Group } from "../types"
+import { usePresence } from "../hooks/usePresence"
+import type { Message, Chat, Group, DirectChat } from "../types"
 
 type WorkspaceContextType = {
   groups: Group[]
+  directChats: DirectChat[]
   activeGroup: Group | undefined
   activeChat: Chat
   activeGroupId: string
   activeChatId: string
   setActiveGroupId: (id: string) => void
   setActiveChatId: (id: string) => void
+  createOrOpenDirectChat: (recipientId: string) => Promise<string | undefined>
+  selectDirectChat: (chatId: string) => void
+  deleteDirectChat: (chatId: string) => void
   isTyping: boolean
+  typingUser: { name: string; isAi: boolean } | null
+  onlineUserIds: Set<string>
   isConnected: boolean
   isLoading: boolean
   error: string | null
@@ -53,6 +60,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const { token, userEmail, username } = useAuthStore()
 
   const [groups, setGroups] = useState<Group[]>([])
+  const [directChats, setDirectChats] = useState<DirectChat[]>([])
   const [activeGroupId, setActiveGroupIdState] = useState<string>(() => localStorage.getItem("nexus_active_group_id") || "")
   const [activeChatId, setActiveChatIdState] = useState<string>(() => localStorage.getItem("nexus_active_chat_id") || "")
   const [isLoading, setIsLoading] = useState(true)
@@ -65,7 +73,11 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const setActiveGroupId = (id: string) => {
     setActiveGroupIdState(id)
     activeGroupIdRef.current = id
-    if (id) localStorage.setItem("nexus_active_group_id", id)
+    if (id) {
+      localStorage.setItem("nexus_active_group_id", id)
+    } else {
+      localStorage.removeItem("nexus_active_group_id")
+    }
   }
 
   const setActiveChatId = (id: string) => {
@@ -77,15 +89,48 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { activeGroupIdRef.current = activeGroupId }, [activeGroupId])
   useEffect(() => { activeChatIdRef.current = activeChatId }, [activeChatId])
 
+  // Load direct chats from localStorage
+  useEffect(() => {
+    if (!userEmail) return
+    const key = `nexus_direct_chats_${userEmail}`
+    const saved = localStorage.getItem(key)
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed)) {
+          queueMicrotask(() => {
+            setDirectChats(parsed)
+          })
+        }
+      } catch (e) {
+        console.error("Failed to load saved direct chats", e)
+      }
+    }
+  }, [userEmail])
+
+  // Save direct chats to localStorage
+  useEffect(() => {
+    if (userEmail && directChats.length > 0) {
+      localStorage.setItem(`nexus_direct_chats_${userEmail}`, JSON.stringify(directChats))
+    }
+  }, [directChats, userEmail])
+
   const activeGroup = useMemo(
     () => groups.find((g) => g.id === activeGroupId) || groups[0],
     [groups, activeGroupId]
   )
 
-  const activeChat = useMemo(
-    () => activeGroup?.chats.find((c) => c.id === activeChatId) || activeGroup?.chats[0] || EMPTY_CHAT,
-    [activeGroup, activeChatId]
-  )
+  const activeChat = useMemo(() => {
+    const direct = directChats.find((dc) => dc.chat_id === activeChatId)
+    if (direct) {
+      return {
+        id: direct.chat_id,
+        title: direct.recipient.display_name || direct.recipient.username || "Direct Message",
+        messages: direct.messages || [],
+      }
+    }
+    return activeGroup?.chats.find((c) => c.id === activeChatId) || activeGroup?.chats[0] || EMPTY_CHAT
+  }, [activeGroup, activeChatId, directChats])
 
   const prevTokenRef = useRef(token)
 
@@ -94,6 +139,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     if (prevTokenRef.current && !token) {
       setTimeout(() => {
         setGroups([])
+        setDirectChats([])
         setActiveGroupIdState("")
         setActiveChatIdState("")
         setProfileImage(null)
@@ -116,7 +162,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       .catch(console.error)
   }, [token])
 
-  // Fetch groups
+  // Fetch groups & synchronize direct chats
   useEffect(() => {
     let isMounted = true
     if (!token) return
@@ -127,38 +173,105 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         const res = await apiClient.get("/api/groups")
         if (!isMounted) return
         if (res.data.groups && res.data.groups.length > 0) {
-          const rawGroups = res.data.groups
+          const rawGroups = res.data.groups as Group[]
+
+          // 1. Separate standard workspace groups from direct chat groups
+          const regularGroups = rawGroups.filter((g: Group) => g.visibility !== "direct")
+          const directGroups = rawGroups.filter((g: Group) => g.visibility === "direct")
+
+          // 2. Set regular workspace groups
           setGroups((prevGroups) => {
-            return rawGroups.map((g: Group) => {
+            return regularGroups.map((g: Group) => {
               const prevGroup = prevGroups.find((pg) => pg.id === g.id)
               return {
                 ...g,
                 members: g.members || [],
-                chats: g.chats ? g.chats.map((c: Chat) => {
-                  const prevChat = prevGroup?.chats.find((pc) => pc.id === c.id)
-                  return {
-                    ...c,
-                    messages: prevChat?.messages || [],
-                  }
-                }) : [],
+                chats: g.chats
+                  ? g.chats.map((c: Chat) => {
+                      const prevChat = prevGroup?.chats.find((pc) => pc.id === c.id)
+                      return {
+                        ...c,
+                        messages: prevChat?.messages || [],
+                      }
+                    })
+                  : [],
               }
             })
           })
 
+          // 3. Extract and merge backend direct chats with local storage state
+          if (directGroups.length > 0) {
+            setDirectChats((prevDirect) => {
+              const merged = [...prevDirect]
+
+              for (const dg of directGroups) {
+                const chatId = dg.chats?.[0]?.id
+                if (!chatId) continue
+
+                const existingIndex = merged.findIndex((dc) => dc.chat_id === chatId)
+                const otherMember = dg.members?.find((m: string) => m !== userEmail) || dg.name || "User"
+                const displayName =
+                  dg.name && dg.name !== "Direct"
+                    ? dg.name
+                    : otherMember.includes("@")
+                      ? otherMember.split("@")[0]
+                      : otherMember
+
+                if (existingIndex >= 0) {
+                  const existing = merged[existingIndex]
+                  merged[existingIndex] = {
+                    ...existing,
+                    id: existing.id || dg.id,
+                    recipient: {
+                      ...existing.recipient,
+                      id: existing.recipient.id || dg.owner_id || dg.id,
+                      display_name: existing.recipient.display_name || displayName,
+                      username:
+                        existing.recipient.username ||
+                        (otherMember.includes("@") ? otherMember.split("@")[0] : undefined),
+                    },
+                  }
+                } else {
+                  merged.push({
+                    id: dg.id,
+                    chat_id: chatId,
+                    recipient: {
+                      id: dg.owner_id || dg.id,
+                      display_name: displayName,
+                      username: otherMember.includes("@") ? otherMember.split("@")[0] : undefined,
+                    },
+                    created_at: (dg as unknown as { created_at?: string }).created_at || new Date().toISOString(),
+                    messages: [],
+                  })
+                }
+              }
+
+              if (userEmail && merged.length > 0) {
+                localStorage.setItem(`nexus_direct_chats_${userEmail}`, JSON.stringify(merged))
+              }
+              return merged
+            })
+          }
+
           const savedGroupId = localStorage.getItem("nexus_active_group_id")
           const savedChatId = localStorage.getItem("nexus_active_chat_id")
 
-          const currentGroup = rawGroups.find((g: Group) => g.id === (activeGroupIdRef.current || savedGroupId)) || rawGroups[0]
-          setActiveGroupId(currentGroup.id)
-
-          const currentChat = currentGroup.chats?.find((c: Chat) => c.id === (activeChatIdRef.current || savedChatId)) || currentGroup.chats?.[0]
-          if (currentChat) {
-            setActiveChatId(currentChat.id)
+          // Only default to group chat if no active chat or direct chat is already selected
+          if (!activeChatIdRef.current && regularGroups.length > 0) {
+            const currentGroup =
+              regularGroups.find((g: Group) => g.id === (activeGroupIdRef.current || savedGroupId)) ||
+              regularGroups[0]
+            if (currentGroup) {
+              setActiveGroupId(currentGroup.id)
+              const currentChat =
+                currentGroup.chats?.find((c: Chat) => c.id === savedChatId) || currentGroup.chats?.[0]
+              if (currentChat) {
+                setActiveChatId(currentChat.id)
+              }
+            }
           }
         }
-
       } catch (err) {
-
         console.error("Failed to fetch groups", err)
         if (isMounted) setError("Failed to load groups. Please refresh the page.")
       } finally {
@@ -168,13 +281,16 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
     fetchGroups()
     return () => { isMounted = false }
-  }, [token])
+  }, [token, userEmail])
 
   // Socket connection
   const { isConnected, connectionError } = useSocket(token)
   const combinedError = connectionError || error
 
-  // Group CRUD
+  // Online presence tracking across chats
+  const { onlineUserIds } = usePresence(activeChatId, isConnected)
+
+  // Group & Direct Chat CRUD
   const {
     createGroup,
     createChat,
@@ -183,6 +299,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     joinGroup,
     leaveGroup,
     removeMember,
+    createOrOpenDirectChat,
+    selectDirectChat,
+    deleteDirectChat,
   } = useGroups({
     activeGroupIdRef,
     activeChatIdRef,
@@ -191,11 +310,15 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     setActiveGroupId,
     setActiveChatId,
     setError,
+    userEmail,
+    directChats,
+    setDirectChats,
   })
 
   // Messages (socket listeners, history, send/delete/edit)
   const {
     isTyping,
+    typingUser,
     streamingMessageId,
     sendMessage,
     deleteMessage,
@@ -209,6 +332,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     activeGroupIdRef,
     activeChatIdRef,
     groups,
+    directChats,
+    setDirectChats,
     userEmail,
     profileImage,
     isConnected,
@@ -219,13 +344,19 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<WorkspaceContextType>(
     () => ({
       groups,
+      directChats,
       activeGroup,
       activeChat,
       activeGroupId,
       activeChatId,
       setActiveGroupId,
       setActiveChatId,
+      createOrOpenDirectChat,
+      selectDirectChat,
+      deleteDirectChat,
       isTyping,
+      typingUser,
+      onlineUserIds,
       isConnected,
       isLoading,
       error: combinedError,
@@ -248,15 +379,15 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       profileImage,
     }),
     [
-      groups, activeGroup, activeChat, activeGroupId, activeChatId,
-      isTyping, isConnected, isLoading, combinedError, streamingMessageId,
+      groups, directChats, activeGroup, activeChat, activeGroupId, activeChatId,
+      createOrOpenDirectChat, selectDirectChat, deleteDirectChat,
+      isTyping, typingUser, onlineUserIds, isConnected, isLoading, combinedError, streamingMessageId,
       sendMessage, createGroup, createChat, deleteGroup, deleteChat,
       joinGroup, leaveGroup, removeMember, deleteMessage, editMessage,
       reactToMessage, sendThreadReply, loadThreadMessages,
       userEmail, username, profileImage,
     ]
   )
-
 
   return (
     <WorkspaceContext.Provider value={value}>

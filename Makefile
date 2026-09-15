@@ -1,16 +1,24 @@
-.PHONY: all build build-all up down test clean logs
+.PHONY: all build build-all build-socket build-prod up prod-up down test test-socket test-all test-load-api test-load-socket test-10k clean logs
 
 # Default target
 all: build-all
 
-# Build all Go binaries
-build-all:
+# Build target alias
+build: build-all
+
+# Build all Go binaries and Elixir socket service
+build-all: build-socket
 	@echo "Building all Go services..."
-	cd services/nexus-api && go build -o bin/api ./cmd/api
-	cd services/nexus-ai-gateway && go build -o bin/gateway ./cmd/gateway
-	cd services/nexus-ai-worker && go build -o bin/worker ./cmd/worker
-	cd services/nexus-billing && go build -o bin/billing ./cmd/billing
+	cd services/nexus-api && go build -buildvcs=false -o bin/api ./cmd/server
+	cd services/nexus-ai-gateway && go build -buildvcs=false -o bin/gateway ./cmd/gateway
+	cd services/nexus-ai-worker && go build -buildvcs=false -o bin/worker ./cmd/worker
+	cd services/nexus-billing && go build -buildvcs=false -o bin/billing ./cmd/billing
 	@echo "Build complete."
+
+# Build Elixir socket service
+build-socket:
+	@echo "Compiling Elixir socket service..."
+	cd services/nexus-socket && mix deps.get && mix compile
 
 # Build production docker images locally
 build-prod:
@@ -33,11 +41,18 @@ down:
 # Run tests
 test:
 	@echo "Running Go tests..."
-	cd services/nexus-api && go test ./...
-	cd services/nexus-ai-gateway && go test ./...
-	cd services/nexus-ai-worker && go test ./...
-	cd services/nexus-billing && go test ./...
+	cd services/nexus-api && go test -buildvcs=false ./...
+	cd services/nexus-ai-gateway && go test -buildvcs=false ./...
+	cd services/nexus-ai-worker && go test -buildvcs=false ./...
+	cd services/nexus-billing && go test -buildvcs=false ./...
 	@echo "Tests complete."
+
+test-socket:
+	@echo "Running Elixir ExUnit tests..."
+	cd services/nexus-socket && mix test
+
+test-all: test test-socket
+	@echo "All service tests passed."
 
 # Run Load Tests (Usage: make test-load-api USERS=500 DURATION=20)
 test-load-api:
@@ -51,9 +66,12 @@ test-10k:
 	REQUESTS=10000 CONCURRENCY=300 node tests/load/api_10k_test.js
 
 
-# Clean binaries
+# Clean binaries and build artifacts
 clean:
 	rm -rf services/nexus-*/bin
+	rm -rf services/nexus-api/bin
+	rm -rf services/nexus-socket/_build services/nexus-socket/erl_crash.dump
+	rm -f coverage.out services/*/coverage.out *.out
 
 # Show logs
 logs:

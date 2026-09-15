@@ -1,5 +1,8 @@
+import { useMemo, useCallback } from "react"
 import Modal from "./Modal"
 import NexusAvatar from "./ui/NexusAvatar"
+import { useAuthStore } from "../stores/authStore"
+import { decodeToken } from "../lib/token"
 import type { Group } from "../types"
 
 type Props = {
@@ -7,15 +10,42 @@ type Props = {
   onClose: () => void
   group: Group
   currentUserEmail: string
+  currentUserId?: string
   onLeave: (groupId: string) => void
   onRemoveMember: (groupId: string, email: string) => void
 }
 
 export default function GroupDetailsModal({
-  isOpen, onClose, group, currentUserEmail, onLeave, onRemoveMember,
+  isOpen, onClose, group, currentUserEmail, currentUserId: propUserId, onLeave, onRemoveMember,
 }: Props) {
-  const isOwner = group.user_id === currentUserEmail
+  const { token } = useAuthStore()
+  const currentUserId = useMemo(() => {
+    if (propUserId) return propUserId
+    const decoded = decodeToken(token)
+    return decoded?.user_id || decoded?.sub || ""
+  }, [propUserId, token])
+
+  const isOwner = Boolean(
+    (group.owner_id && currentUserId && group.owner_id === currentUserId) ||
+    (group.user_id && (group.user_id === currentUserEmail || (currentUserId && group.user_id === currentUserId)))
+  )
   const isPersonal = group.id.startsWith("personal_")
+
+  const checkIsMemberOwner = useCallback(
+    (memberEmail: string) => {
+      if (
+        group.user_id &&
+        (group.user_id === memberEmail || (currentUserId && group.user_id === currentUserId && memberEmail === currentUserEmail))
+      ) {
+        return true
+      }
+      if (group.owner_id && currentUserId && group.owner_id === currentUserId && memberEmail === currentUserEmail) {
+        return true
+      }
+      return false
+    },
+    [group.owner_id, group.user_id, currentUserId, currentUserEmail]
+  )
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Group Details">
@@ -72,7 +102,7 @@ export default function GroupDetailsModal({
                     <span className={`text-sm truncate ${member === currentUserEmail ? "font-semibold text-nexus-text" : "text-nexus-text/70"}`}>
                       {member === currentUserEmail ? `${member} (You)` : member}
                     </span>
-                    {group.user_id === member && (
+                    {checkIsMemberOwner(member) && (
                       <span className="text-[9px] text-nexus-primary/70">Owner</span>
                     )}
                   </div>

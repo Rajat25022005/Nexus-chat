@@ -30,10 +30,98 @@ SyntaxHighlighter.registerLanguage("html", markup)
 SyntaxHighlighter.registerLanguage("xml", markup)
 SyntaxHighlighter.registerLanguage("tsx", tsx)
 SyntaxHighlighter.registerLanguage("jsx", jsx)
+import { createPortal } from "react-dom"
 import { getImageUrl } from "../api/config"
-import { Reply, Pencil, Trash2, Check, X, MessageCircle } from "lucide-react"
+import { sanitizeUrl } from "../lib/fileSecurity"
+import { downloadFile } from "../api/files"
+import { Reply, Pencil, Trash2, Check, X, MessageCircle, FileText, Download } from "lucide-react"
 import { QuickReactionPicker, ReactionBar } from "./ReactionBar"
-import type { Message } from "../types"
+import type { Message, FileAttachment } from "../types"
+
+interface ParsedAttachment {
+  name: string
+  url: string
+  isImage: boolean
+  fileId?: string
+}
+
+function extractFileIdFromUrl(url: string): string | undefined {
+  if (!url) return undefined
+  const filesMatch = url.match(/\/files\/([0-9a-fA-F-]{36})/i)
+  if (filesMatch) return filesMatch[1]
+
+  const attachmentMatch = url.match(/\/attachments\/[0-9a-fA-F-]{36}\/([0-9a-fA-F-]{36})/i)
+  if (attachmentMatch) return attachmentMatch[1]
+
+  const uuidMatches = url.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g)
+  if (uuidMatches && uuidMatches.length > 0) {
+    return uuidMatches[uuidMatches.length - 1]
+  }
+  return undefined
+}
+
+function parseMessageAttachments(
+  content: string,
+  explicitAttachments?: FileAttachment[]
+): { text: string; attachments: ParsedAttachment[] } {
+  const attachments: ParsedAttachment[] = []
+  let remainingText = content || ""
+
+  // 1. Explicit attachments from message object
+  if (explicitAttachments && explicitAttachments.length > 0) {
+    explicitAttachments.forEach((att) => {
+      const isImg =
+        (att.contentType?.startsWith("image/") ?? false) ||
+        /\.(png|jpe?g|gif|webp|bmp)$/i.test(att.name || att.url)
+      const downloadUrl = att.download_url || att.url
+      attachments.push({
+        name: att.name || "Attachment",
+        url: downloadUrl,
+        isImage: isImg,
+        fileId: att.id || extractFileIdFromUrl(downloadUrl),
+      })
+    })
+  }
+
+  // 2. Extract Markdown images: ![alt](url)
+  const imgRegex = /!\[(.*?)\]\((https?:\/\/[^\s)]+)\)/g
+  let imgMatch: RegExpExecArray | null
+  while ((imgMatch = imgRegex.exec(content || "")) !== null) {
+    const name = imgMatch[1] || "Image"
+    const url = imgMatch[2]
+    if (!attachments.some((a) => a.url === url)) {
+      attachments.push({
+        name,
+        url,
+        isImage: true,
+        fileId: extractFileIdFromUrl(url),
+      })
+    }
+    remainingText = remainingText.replace(imgMatch[0], "")
+  }
+
+  // 3. Extract Markdown links: [name](url)
+  const linkRegex = /\[(.*?)\]\((https?:\/\/[^\s)]+)\)/g
+  let linkMatch: RegExpExecArray | null
+  while ((linkMatch = linkRegex.exec(content || "")) !== null) {
+    const name = linkMatch[1] || "Document"
+    const url = linkMatch[2]
+    if (!attachments.some((a) => a.url === url)) {
+      const isImg =
+        /\.(png|jpe?g|gif|webp|bmp)$/i.test(name) ||
+        /\.(png|jpe?g|gif|webp|bmp)(\?.*)?$/i.test(url)
+      attachments.push({
+        name,
+        url,
+        isImage: isImg,
+        fileId: extractFileIdFromUrl(url),
+      })
+    }
+    remainingText = remainingText.replace(linkMatch[0], "")
+  }
+
+  return { text: remainingText.trim(), attachments }
+}
 
 const COLORS = [
   "#e542a3", "#02a698", "#e91e63", "#9c27b0", "#673ab7", "#3f51b5",
@@ -117,7 +205,118 @@ const MessageBubble = memo(function MessageBubble({
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(message.content)
   const [entranceDone, setEntranceDone] = useState(false)
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
+  const [refreshedUrls, setRefreshedUrls] = useState<Record<string, string>>({})
   const bubbleRef = useRef<HTMLDivElement>(null)
+  const lightboxRef = useRef<HTMLDivElement>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
+
+  // Lightbox accessibility: Escape key, focus trapping, scroll locking, focus restore
+  useEffect(() => {
+    if (!lightboxUrl) return
+
+    previousFocusRef.current = document.activeElement as HTMLElement | null
+
+    const closeBtn = lightboxRef.current?.querySelector<HTMLButtonElement>("button")
+    closeBtn?.focus()
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault()
+        setLightboxUrl(null)
+        return
+      }
+
+      if (e.key === "Tab" && lightboxRef.current) {
+        const focusableElements = lightboxRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        )
+        if (focusableElements.length === 0) return
+        const first = focusableElements[0]
+        const last = focusableElements[focusableElements.length - 1]
+
+        if (e.shiftKey) {
+          if (document.activeElement === first || document.activeElement === lightboxRef.current) {
+            e.preventDefault()
+            last.focus()
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault()
+            first.focus()
+          }
+        }
+      }
+    }
+
+    const originalOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    window.addEventListener("keydown", handleKeyDown)
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown)
+      document.body.style.overflow = originalOverflow
+      if (previousFocusRef.current && typeof previousFocusRef.current.focus === "function") {
+        previousFocusRef.current.focus()
+      }
+    }
+  }, [lightboxUrl])
+
+  const { text: cleanText, attachments } = useMemo(
+    () => parseMessageAttachments(message.content, message.attachments),
+    [message.content, message.attachments]
+  )
+
+  const getEffectiveUrl = useCallback(
+    (att: ParsedAttachment) => refreshedUrls[att.url] || att.url,
+    [refreshedUrls]
+  )
+
+  const handleImageError = useCallback(
+    async (att: ParsedAttachment) => {
+      const fileId = att.fileId || extractFileIdFromUrl(att.url)
+      if (!fileId || refreshedUrls[att.url]) return
+      try {
+        const res = await downloadFile(fileId)
+        if (res.download_url) {
+          setRefreshedUrls((prev) => ({ ...prev, [att.url]: res.download_url }))
+        }
+      } catch (err) {
+        console.warn("Failed to refresh expired image attachment URL", err)
+      }
+    },
+    [refreshedUrls]
+  )
+
+  const handleDownloadAttachment = useCallback(
+    async (e: React.MouseEvent, att: ParsedAttachment) => {
+      e.preventDefault()
+      let downloadUrl = refreshedUrls[att.url] || att.url
+      const fileId = att.fileId || extractFileIdFromUrl(att.url)
+
+      if (fileId) {
+        try {
+          const res = await downloadFile(fileId)
+          if (res.download_url) {
+            downloadUrl = res.download_url
+            setRefreshedUrls((prev) => ({ ...prev, [att.url]: res.download_url }))
+          }
+        } catch (err) {
+          console.warn("Failed to refresh pre-signed download URL, using original URL", err)
+        }
+      }
+
+      const anchor = document.createElement("a")
+      anchor.href = downloadUrl
+      anchor.download = att.name
+      anchor.target = "_blank"
+      anchor.rel = "noopener noreferrer"
+      document.body.appendChild(anchor)
+      anchor.click()
+      document.body.removeChild(anchor)
+    },
+    [refreshedUrls]
+  )
 
   const senderColor = useMemo(() => getSenderColor(message.sender), [message.sender])
 
@@ -333,23 +532,16 @@ const MessageBubble = memo(function MessageBubble({
                 <div className="prose dark:prose-invert prose-sm max-w-none text-nexus-text [&_pre]:m-0 [&_pre]:bg-transparent [&_p]:mb-1.5 [&_p:last-child]:mb-0 [&_ul]:mb-1.5 [&_ol]:mb-1.5 [&_li]:mb-0.5 [&_code]:text-emerald-600 dark:[&_code]:text-emerald-300 [&_code]:bg-nexus-surface [&_code]:px-1 [&_code]:rounded [&_code]:text-[13px]">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
-                    urlTransform={(url) => {
-                      try {
-                        const parsed = new URL(url, window.location.origin)
-                        const allowedProtocols = ["http:", "https:", "mailto:", "tel:"]
-                        if (allowedProtocols.includes(parsed.protocol)) {
-                          return url
-                        }
-                        return ""
-                      } catch {
-                        return ""
-                      }
-                    }}
+                    urlTransform={(url) => sanitizeUrl(url)}
                     components={{
                       a({ href, children, ...props }) {
+                        const safeHref = sanitizeUrl(href)
+                        if (!safeHref || safeHref === "#") {
+                          return <span>{children}</span>
+                        }
                         return (
                           <a
-                            href={href}
+                            href={safeHref}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-nexus-primary underline underline-offset-2 hover:brightness-110 transition-colors"
@@ -357,6 +549,33 @@ const MessageBubble = memo(function MessageBubble({
                           >
                             {children}
                           </a>
+                        )
+                      },
+                      img({ src, alt, ...props }) {
+                        const safeSrc = sanitizeUrl(src)
+                        // Block empty, protocol-less, SVG, or HTML image sources to prevent DOM XSS
+                        if (
+                          !safeSrc ||
+                          safeSrc.toLowerCase().endsWith(".svg") ||
+                          safeSrc.toLowerCase().includes("image/svg+xml")
+                        ) {
+                          return (
+                            <span className="text-xs text-nexus-muted italic block my-1">
+                              [Image blocked: vector SVG images are not permitted]
+                            </span>
+                          )
+                        }
+                        return (
+                          <img
+                            src={safeSrc}
+                            alt={alt || "Embedded image"}
+                            loading="lazy"
+                            decoding="async"
+                            referrerPolicy="no-referrer"
+                            onClick={() => setLightboxUrl(safeSrc)}
+                            className="max-w-full max-h-64 object-contain rounded-lg my-1.5 border border-white/[0.06] cursor-pointer hover:opacity-95 transition-opacity"
+                            {...props}
+                          />
                         )
                       },
                       code({ className, children, ...props }) {
@@ -390,7 +609,60 @@ const MessageBubble = memo(function MessageBubble({
                   )}
                 </div>
               ) : (
-                message.content
+                <div className="flex flex-col gap-1.5">
+                  {cleanText && <div>{cleanText}</div>}
+                  {attachments.length > 0 && (
+                    <div className="flex flex-col gap-1.5 mt-1">
+                      {attachments.map((att, idx) => {
+                        const effectiveUrl = getEffectiveUrl(att)
+                        return att.isImage ? (
+                          <div
+                            key={idx}
+                            className="overflow-hidden rounded-xl border border-white/10 bg-black/20 max-w-sm cursor-pointer hover:opacity-95 transition-opacity"
+                            onClick={() => setLightboxUrl(effectiveUrl)}
+                          >
+                            <img
+                              src={effectiveUrl}
+                              alt={att.name}
+                              loading="lazy"
+                              onError={() => handleImageError(att)}
+                              className="max-h-60 w-auto object-contain rounded-xl"
+                            />
+                          </div>
+                        ) : (
+                          <a
+                            key={idx}
+                            href={effectiveUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download={att.name}
+                            onClick={(e) => handleDownloadAttachment(e, att)}
+                            className={`flex items-center gap-2.5 p-2 rounded-xl transition-all no-underline ${
+                              isMe
+                                ? "bg-black/20 hover:bg-black/30 text-white border border-white/10"
+                                : "bg-nexus-card hover:bg-nexus-hover text-nexus-text border border-nexus-border/50"
+                            }`}
+                          >
+                            <div className="w-8 h-8 rounded-lg bg-nexus-primary/10 text-nexus-primary flex items-center justify-center shrink-0">
+                              <FileText className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-medium truncate">
+                                {att.name}
+                              </p>
+                              <span className="text-[10px] opacity-70">
+                                Download file
+                              </span>
+                            </div>
+                            <div className="p-1 rounded-md opacity-70 hover:opacity-100 transition-opacity">
+                              <Download className="w-3.5 h-3.5" />
+                            </div>
+                          </a>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 
@@ -429,6 +701,36 @@ const MessageBubble = memo(function MessageBubble({
           )}
         </div>
       </div>
+
+      {/* Lightbox Modal */}
+      {lightboxUrl &&
+        createPortal(
+          <div
+            ref={lightboxRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Image preview"
+            tabIndex={-1}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-[fadeIn_0.15s_ease-out]"
+            onClick={() => setLightboxUrl(null)}
+          >
+            <button
+              type="button"
+              onClick={() => setLightboxUrl(null)}
+              className="absolute top-4 right-4 p-2 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors z-10"
+              aria-label="Close image preview"
+            >
+              <X size={20} />
+            </button>
+            <img
+              src={lightboxUrl}
+              alt="Preview"
+              className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl animate-[scaleIn_0.15s_ease-out]"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>,
+          document.body
+        )}
     </div>
   )
 })

@@ -4,6 +4,15 @@ export type ReplyTo = {
   content: string
 }
 
+export type FileAttachment = {
+  id?: string
+  name: string
+  url: string
+  download_url?: string
+  contentType?: string
+  size?: number
+}
+
 export type Message = {
   id: string
   role: "user" | "assistant"
@@ -19,12 +28,30 @@ export type Message = {
   thread_count?: number
   thread_last_reply_at?: string
   thread_messages?: Message[]
+  attachments?: FileAttachment[]
+  status?: "sending" | "delivered" | "failed"
 }
 
 export type Chat = {
   id: string
   title: string
   messages: Message[]
+}
+
+export type DirectChatRecipient = {
+  id: string
+  display_name: string
+  username?: string
+  avatar_url?: string
+}
+
+export type DirectChat = {
+  id: string
+  chat_id: string
+  recipient: DirectChatRecipient
+  created_at: string
+  messages: Message[]
+  unread_count?: number
 }
 
 export type Group = {

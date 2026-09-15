@@ -10,18 +10,23 @@ import {
   Link,
   Settings,
   User,
+  UserSearch,
+  Sun,
   LogOut
 } from 'lucide-react';
+import { useThemeStore } from '../stores/themeStore';
 import { cn } from '../lib/utils';
-import type { Group } from '../types';
+import type { Group, DirectChat } from '../types';
 
 type CommandPaletteProps = {
   isOpen: boolean;
   onClose: () => void;
   groups: Group[];
+  directChats?: DirectChat[];
   activeGroupId?: string;
   onSelectGroup: (groupId: string) => void;
   onSelectChat: (chatId: string) => void;
+  onSelectDirectChat?: (chatId: string) => void;
   onNavigate: (path: string) => void;
   onAction: (action: string) => void;
 };
@@ -36,10 +41,13 @@ type ActionItem = {
 
 type FlattenedItem = 
   | { type: 'channel'; id: string; label: string; subtitle: string; groupId: string; chatId: string; icon: React.ElementType }
+  | { type: 'direct'; id: string; label: string; subtitle: string; chatId: string; icon: React.ElementType }
   | { type: 'workspace'; id: string; label: string; groupId: string; icon: React.ElementType }
   | { type: 'action'; id: string; label: string; actionId?: string; path?: string; icon: React.ElementType };
 
 const ACTIONS: ActionItem[] = [
+  { id: 'action-search-users', label: 'Search Users / Direct Message', icon: UserSearch, actionId: 'search-users' },
+  { id: 'action-toggle-theme', label: 'Toggle Theme', icon: Sun, actionId: 'toggle-theme' },
   { id: 'action-new-chat', label: 'New Chat', icon: MessageSquarePlus, actionId: 'new-chat' },
   { id: 'action-new-group', label: 'New Group', icon: FolderPlus, actionId: 'new-group' },
   { id: 'action-join-group', label: 'Join Group', icon: Link, actionId: 'join-group' },
@@ -52,8 +60,10 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   isOpen,
   onClose,
   groups,
+  directChats = [],
   onSelectGroup,
   onSelectChat,
+  onSelectDirectChat,
   onNavigate,
   onAction
 }) => {
@@ -78,6 +88,21 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   // Compute flattened and filtered items
   const items = useMemo(() => {
     const lowerQuery = query.toLowerCase();
+
+    // Direct Messages
+    const directItems: FlattenedItem[] = directChats
+      .filter(dc =>
+        dc.recipient.display_name.toLowerCase().includes(lowerQuery) ||
+        (dc.recipient.username && dc.recipient.username.toLowerCase().includes(lowerQuery))
+      )
+      .map(dc => ({
+        type: 'direct',
+        id: `direct-${dc.chat_id}`,
+        label: dc.recipient.display_name,
+        subtitle: dc.recipient.username ? `@${dc.recipient.username}` : 'Direct Message',
+        chatId: dc.chat_id,
+        icon: User
+      }));
     
     // Channels
     const channels: FlattenedItem[] = [];
@@ -120,16 +145,18 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         icon: a.icon
       }));
 
-    return [...channels, ...workspaces, ...actions];
-  }, [groups, query]);
+    return [...directItems, ...channels, ...workspaces, ...actions];
+  }, [groups, directChats, query]);
 
   // Group items for rendering
   const groupedItems = useMemo(() => {
+    const directMessages = items.filter(item => item.type === 'direct');
     const channels = items.filter(item => item.type === 'channel');
     const workspaces = items.filter(item => item.type === 'workspace');
     const actions = items.filter(item => item.type === 'action');
     
     return [
+      { section: 'Direct Messages', items: directMessages },
       { section: 'Channels', items: channels },
       { section: 'Workspaces', items: workspaces },
       { section: 'Actions', items: actions }
@@ -152,17 +179,24 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   }, [onClose]);
 
   const handleSelect = useCallback((item: FlattenedItem) => {
-    if (item.type === 'channel') {
+    if (item.type === 'direct') {
+      if (onSelectDirectChat) onSelectDirectChat(item.chatId);
+      else onSelectChat(item.chatId);
+    } else if (item.type === 'channel') {
       onSelectGroup(item.groupId);
       onSelectChat(item.chatId);
     } else if (item.type === 'workspace') {
       onSelectGroup(item.groupId);
     } else if (item.type === 'action') {
-      if (item.actionId) onAction(item.actionId);
+      if (item.actionId === 'toggle-theme') {
+        useThemeStore.getState().toggleTheme();
+      } else if (item.actionId) {
+        onAction(item.actionId);
+      }
       if (item.path) onNavigate(item.path);
     }
     handleClose();
-  }, [onSelectGroup, onSelectChat, onAction, onNavigate, handleClose]);
+  }, [onSelectDirectChat, onSelectGroup, onSelectChat, onAction, onNavigate, handleClose]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (items.length === 0) return;

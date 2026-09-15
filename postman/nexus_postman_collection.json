@@ -1,0 +1,729 @@
+{
+	"info": {
+		"_postman_id": "nexus-chat-api-socket-collection",
+		"name": "Nexus Chat - API & Socket Test Suite",
+		"description": "Comprehensive Postman test collection for testing Nexus API (Go) and Nexus Socket (Elixir/Phoenix) services in the root directory.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{jwt_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"item": [
+		{
+			"name": "01 - Health & System Probes",
+			"item": [
+				{
+					"name": "API: Health Check",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url_api}}/health",
+							"host": ["{{base_url_api}}"],
+							"path": ["health"]
+						},
+						"description": "Basic health probe for nexus-api"
+					},
+					"response": []
+				},
+				{
+					"name": "API: Healthz Probe",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url_api}}/healthz",
+							"host": ["{{base_url_api}}"],
+							"path": ["healthz"]
+						},
+						"description": "K8s/Docker container healthcheck probe"
+					},
+					"response": []
+				},
+				{
+					"name": "API: Liveness Probe",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url_api}}/live",
+							"host": ["{{base_url_api}}"],
+							"path": ["live"]
+						},
+						"description": "Liveness probe"
+					},
+					"response": []
+				},
+				{
+					"name": "API: Readiness Probe (DB Check)",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url_api}}/ready",
+							"host": ["{{base_url_api}}"],
+							"path": ["ready"]
+						},
+						"description": "Readiness probe verifying live PostgreSQL connection pool"
+					},
+					"response": []
+				},
+				{
+					"name": "API: Runtime Metrics",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url_api}}/metrics/runtime",
+							"host": ["{{base_url_api}}"],
+							"path": ["metrics", "runtime"]
+						},
+						"description": "Runtime Go memory and goroutine telemetry"
+					},
+					"response": []
+				},
+				{
+					"name": "Socket: Health Check",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{socket_http_url}}/health",
+							"host": ["{{socket_http_url}}"],
+							"path": ["health"]
+						},
+						"description": "Liveness probe for nexus-socket"
+					},
+					"response": []
+				},
+				{
+					"name": "Socket: Readiness Check",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{socket_http_url}}/ready",
+							"host": ["{{socket_http_url}}"],
+							"path": ["ready"]
+						},
+						"description": "Readiness probe for nexus-socket"
+					},
+					"response": []
+				},
+				{
+					"name": "Socket: VM & Connection Metrics",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{socket_http_url}}/metrics",
+							"host": ["{{socket_http_url}}"],
+							"path": ["metrics"]
+						},
+						"description": "Erlang/OTP VM memory, scheduler run queues, and Redis bridge status"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "02 - Authentication & Profile",
+			"item": [
+				{
+					"name": "Register User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var data = pm.response.json();",
+									"    if (data.token) {",
+									"        pm.environment.set('jwt_token', data.token);",
+									"        console.log('Saved jwt_token:', data.token);",
+									"    }",
+									"    if (data.user && data.user.id) {",
+									"        pm.environment.set('user_id', data.user.id);",
+									"        console.log('Saved user_id:', data.user.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"testuser@nexus.chat\",\n    \"password\": \"SecretPass123!\",\n    \"display_name\": \"Test Engineer\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url_api}}/api/auth/register",
+							"host": ["{{base_url_api}}"],
+							"path": ["api", "auth", "register"]
+						},
+						"description": "Registers a new user, automatically creates tenant, default workspace, general group, and issues JWT token."
+					},
+					"response": []
+				},
+				{
+					"name": "Login User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var data = pm.response.json();",
+									"    if (data.token) {",
+									"        pm.environment.set('jwt_token', data.token);",
+									"        console.log('Saved jwt_token:', data.token);",
+									"    }",
+									"    if (data.user && data.user.id) {",
+									"        pm.environment.set('user_id', data.user.id);",
+									"        console.log('Saved user_id:', data.user.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"testuser@nexus.chat\",\n    \"password\": \"SecretPass123!\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url_api}}/api/auth/login",
+							"host": ["{{base_url_api}}"],
+							"path": ["api", "auth", "login"]
+						},
+						"description": "Authenticates user credentials and returns JWT token."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Profile (Me)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url_api}}/api/auth/me",
+							"host": ["{{base_url_api}}"],
+							"path": ["api", "auth", "me"]
+						},
+						"description": "Fetches current user's profile and workspace details using Bearer JWT."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Profile",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"display_name\": \"Test Lead\",\n    \"phone_number\": \"+14155552671\",\n    \"username\": \"test_lead_01\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url_api}}/api/auth/profile",
+							"host": ["{{base_url_api}}"],
+							"path": ["api", "auth", "profile"]
+						},
+						"description": "Updates profile details including display name and phone number."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "03 - Workspaces",
+			"item": [
+				{
+					"name": "List User Workspaces",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var data = pm.response.json();",
+									"    if (data.workspaces && data.workspaces.length > 0) {",
+									"        pm.environment.set('workspace_id', data.workspaces[0].id);",
+									"        console.log('Saved workspace_id:', data.workspaces[0].id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url_api}}/api/workspaces",
+							"host": ["{{base_url_api}}"],
+							"path": ["api", "workspaces"]
+						},
+						"description": "Lists all workspaces the authenticated user belongs to."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Workspace Details",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url_api}}/api/workspaces/{{workspace_id}}",
+							"host": ["{{base_url_api}}"],
+							"path": ["api", "workspaces", "{{workspace_id}}"]
+						},
+						"description": "Fetches metadata for the selected workspace."
+					},
+					"response": []
+				},
+				{
+					"name": "List Workspace Members",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url_api}}/api/workspaces/{{workspace_id}}/members",
+							"host": ["{{base_url_api}}"],
+							"path": ["api", "workspaces", "{{workspace_id}}", "members"]
+						},
+						"description": "Lists all members inside the workspace."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "04 - Groups & Channels",
+			"item": [
+				{
+					"name": "List Groups in Workspace",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var data = pm.response.json();",
+									"    if (data.groups && data.groups.length > 0) {",
+									"        pm.environment.set('group_id', data.groups[0].id);",
+									"        console.log('Saved group_id:', data.groups[0].id);",
+									"        if (data.groups[0].invite_code) {",
+									"            pm.environment.set('invite_code', data.groups[0].invite_code);",
+									"        }",
+									"        if (data.groups[0].chats && data.groups[0].chats.length > 0) {",
+									"            pm.environment.set('chat_id', data.groups[0].chats[0].id);",
+									"            console.log('Saved chat_id:', data.groups[0].chats[0].id);",
+									"        }",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url_api}}/api/groups?workspace_id={{workspace_id}}",
+							"host": ["{{base_url_api}}"],
+							"path": ["api", "groups"],
+							"query": [
+								{
+									"key": "workspace_id",
+									"value": "{{workspace_id}}"
+								}
+							]
+						},
+						"description": "Lists all groups/channels inside the workspace, including chats."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Group",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var data = pm.response.json();",
+									"    if (data.group && data.group.id) {",
+									"        pm.environment.set('group_id', data.group.id);",
+									"        if (data.group.invite_code) {",
+									"            pm.environment.set('invite_code', data.group.invite_code);",
+									"        }",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"workspace_id\": \"{{workspace_id}}\",\n    \"name\": \"Engineering\",\n    \"ai_enabled\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url_api}}/api/groups",
+							"host": ["{{base_url_api}}"],
+							"path": ["api", "groups"]
+						},
+						"description": "Creates a new group channel in the workspace."
+					},
+					"response": []
+				},
+				{
+					"name": "Join Group via Invite Code",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"code\": \"{{invite_code}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url_api}}/api/groups/join",
+							"host": ["{{base_url_api}}"],
+							"path": ["api", "groups", "join"]
+						},
+						"description": "Joins a group using a Crockford Base-32 invite code (e.g. NX7K-Q2R9)."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "05 - Chats & Message History",
+			"item": [
+				{
+					"name": "Create Chat Room in Group",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var data = pm.response.json();",
+									"    if (data.chat && data.chat.id) {",
+									"        pm.environment.set('chat_id', data.chat.id);",
+									"        console.log('Saved chat_id:', data.chat.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"group_id\": \"{{group_id}}\",\n    \"title\": \"dev-chat\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url_api}}/api/chats",
+							"host": ["{{base_url_api}}"],
+							"path": ["api", "chats"]
+						},
+						"description": "Creates a chat room within a group."
+					},
+					"response": []
+				},
+				{
+					"name": "List Chats in Group",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url_api}}/api/chats?group_id={{group_id}}",
+							"host": ["{{base_url_api}}"],
+							"path": ["api", "chats"],
+							"query": [
+								{
+									"key": "group_id",
+									"value": "{{group_id}}"
+								}
+							]
+						},
+						"description": "Lists all chat rooms in a group."
+					},
+					"response": []
+				},
+				{
+					"name": "List Messages in Chat",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var data = pm.response.json();",
+									"    if (data.messages && data.messages.length > 0) {",
+									"        pm.environment.set('message_id', data.messages[0].id);",
+									"        console.log('Saved message_id:', data.messages[0].id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url_api}}/api/chats/{{chat_id}}/messages?limit=50",
+							"host": ["{{base_url_api}}"],
+							"path": ["api", "chats", "{{chat_id}}", "messages"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "50"
+								}
+							]
+						},
+						"description": "Fetches paginated message history for a chat channel."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Message Thread Replies",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url_api}}/api/messages/{{message_id}}/thread",
+							"host": ["{{base_url_api}}"],
+							"path": ["api", "messages", "{{message_id}}", "thread"]
+						},
+						"description": "Fetches replies to a parent message."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "06 - User Discovery & Direct 1:1 Chats",
+			"item": [
+				{
+					"name": "Search Users (Prefix / Email / Phone)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var data = pm.response.json();",
+									"    if (data.users && data.users.length > 0) {",
+									"        pm.environment.set('recipient_user_id', data.users[0].id);",
+									"        console.log('Saved recipient_user_id:', data.users[0].id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url_api}}/api/v1/users/search?q=test",
+							"host": ["{{base_url_api}}"],
+							"path": ["api", "v1", "users", "search"],
+							"query": [
+								{
+									"key": "q",
+									"value": "test"
+								}
+							]
+						},
+						"description": "Searches users by email (@), phone (+), or username prefix (3-30 chars) with PII masking."
+					},
+					"response": []
+				},
+				{
+					"name": "Initiate Direct 1:1 Chat",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"recipient_id\": \"{{recipient_user_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url_api}}/api/v1/chats/direct",
+							"host": ["{{base_url_api}}"],
+							"path": ["api", "v1", "chats", "direct"]
+						},
+						"description": "Creates or retrieves an existing 1-on-1 direct messaging chat with canonical pair sorting and 23505 race recovery."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "07 - MinIO S3 Object Storage Lifecycle",
+			"item": [
+				{
+					"name": "Request Pre-Signed Upload URL",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var data = pm.response.json();",
+									"    if (data.file_id) {",
+									"        pm.environment.set('file_id', data.file_id);",
+									"        console.log('Saved file_id:', data.file_id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"file_type\": \"avatar\",\n    \"file_name\": \"profile.png\",\n    \"content_type\": \"image/png\",\n    \"size_bytes\": 1048576\n}"
+						},
+						"url": {
+							"raw": "{{base_url_api}}/api/v1/files/presign-upload",
+							"host": ["{{base_url_api}}"],
+							"path": ["api", "v1", "files", "presign-upload"]
+						},
+						"description": "Generates a 15-minute SigV4 pre-signed PUT upload URL for MinIO."
+					},
+					"response": []
+				},
+				{
+					"name": "Confirm Upload Completion",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"file_id\": \"{{file_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url_api}}/api/v1/files/confirm-upload",
+							"host": ["{{base_url_api}}"],
+							"path": ["api", "v1", "files", "confirm-upload"]
+						},
+						"description": "Verifies MinIO StatObject and activates file record in PostgreSQL."
+					},
+					"response": []
+				},
+				{
+					"name": "Download File (Pre-Signed GET)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url_api}}/api/v1/files/{{file_id}}/download?redirect=false",
+							"host": ["{{base_url_api}}"],
+							"path": ["api", "v1", "files", "{{file_id}}", "download"],
+							"query": [
+								{
+									"key": "redirect",
+									"value": "false"
+								}
+							]
+						},
+						"description": "Generates authorized download pre-signed GET URL."
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}

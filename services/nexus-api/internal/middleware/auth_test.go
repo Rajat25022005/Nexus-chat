@@ -8,10 +8,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
-func TestJWTAuthMiddleware_MissingHeader(t *testing.T) {
+func init() {
 	gin.SetMode(gin.TestMode)
+}
+
+func TestJWTAuthMiddleware_MissingHeader(t *testing.T) {
 	r := gin.New()
 	r.Use(JWTAuthMiddleware("test-secret"))
 	r.GET("/protected", func(c *gin.Context) {
@@ -28,7 +32,6 @@ func TestJWTAuthMiddleware_MissingHeader(t *testing.T) {
 }
 
 func TestJWTAuthMiddleware_InvalidFormat(t *testing.T) {
-	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.Use(JWTAuthMiddleware("test-secret"))
 	r.GET("/protected", func(c *gin.Context) {
@@ -46,12 +49,11 @@ func TestJWTAuthMiddleware_InvalidFormat(t *testing.T) {
 }
 
 func TestJWTAuthMiddleware_ValidToken(t *testing.T) {
-	gin.SetMode(gin.TestMode)
 	secret := "test-secret-key-12345"
-	userID := "018f3a2b-7c8d-4e5f-9a0b-1c2d3e4f5a6b"
-	email := "test@example.com"
+	validUUID := uuid.New()
+	email := "alex@nexus.internal"
 
-	token, err := GenerateJWT(userID, email, secret, time.Hour)
+	token, err := GenerateJWT(validUUID.String(), email, secret, time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
@@ -59,10 +61,21 @@ func TestJWTAuthMiddleware_ValidToken(t *testing.T) {
 	r := gin.New()
 	r.Use(JWTAuthMiddleware(secret))
 	r.GET("/protected", func(c *gin.Context) {
-		uid, _ := c.Get("user_id")
-		uemail, _ := c.Get("user_email")
+		uid, err := GetUserID(c)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		uemail, err := GetUserEmail(c)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		mustUID := MustGetUserID(c)
+
 		c.JSON(http.StatusOK, gin.H{
-			"user_id":    uid,
+			"user_id":    uid.String(),
+			"must_id":    mustUID.String(),
 			"user_email": uemail,
 		})
 	})
@@ -78,8 +91,7 @@ func TestJWTAuthMiddleware_ValidToken(t *testing.T) {
 }
 
 func TestJWTAuthMiddleware_WrongSecret(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	token, err := GenerateJWT("user-1", "user1@example.com", "secret-a", time.Hour)
+	token, err := GenerateJWT(uuid.NewString(), "user@example.com", "secret-a", time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
@@ -100,8 +112,38 @@ func TestJWTAuthMiddleware_WrongSecret(t *testing.T) {
 	}
 }
 
+func TestJWTAuthMiddleware_ExpiredToken(t *testing.T) {
+	secret := "test-secret"
+	// Generate token expired 1 hour ago
+	now := time.Now().Add(-2 * time.Hour)
+	claims := JWTClaims{
+		UserID: uuid.NewString(),
+		Email:  "expired@example.com",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)), // expired 1 hour ago
+			IssuedAt:  jwt.NewNumericDate(now),
+		},
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenStr, _ := tok.SignedString([]byte(secret))
+
+	r := gin.New()
+	r.Use(JWTAuthMiddleware(secret))
+	r.GET("/protected", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/protected", nil)
+	req.Header.Set("Authorization", "Bearer "+tokenStr)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 Unauthorized for expired token, got %d", w.Code)
+	}
+}
+
 func TestVerifyJWT_RejectNonHS256Algorithm(t *testing.T) {
-	// Construct a token with "none" algorithm
 	claims := JWTClaims{
 		UserID: "test-user",
 		Email:  "test@example.com",

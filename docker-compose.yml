@@ -50,6 +50,61 @@ services:
     volumes:
       - ./scripts/seed:/scripts:ro
 
+  # ── MinIO Object Storage Engine ──
+  minio:
+    image: minio/minio:RELEASE.2024-11-07T00-52-16Z
+    container_name: nexus-minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"   # S3 API Port: Client uploads/downloads & API RPC
+      - "9001:9001"   # MinIO Web Console UI
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadminpassword}
+      MINIO_BROWSER: "on"
+      MINIO_SERVER_URL: ${MINIO_SERVER_URL:-http://localhost:9000}
+      MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL:-http://localhost:9001}
+      MINIO_API_CORS_ALLOW_ORIGIN: "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,https://nexusainow.online,https://www.nexusainow.online,*"
+    volumes:
+      - minio_storage:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  # ── MinIO Automated Provisioning & CORS Configuration (mc) ──
+  minio-init:
+    image: minio/mc:latest
+    container_name: nexus-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadminpassword}
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      set -e
+      echo '==> [MinIO Init] Configuring local alias...'
+      until /usr/bin/mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do
+        echo 'Waiting for MinIO endpoint...'; sleep 1;
+      done
+
+      echo '==> [MinIO Init] Creating storage buckets...'
+      /usr/bin/mc mb --ignore-existing local/nexus-avatars
+      /usr/bin/mc mb --ignore-existing local/nexus-attachments
+
+      echo '==> [MinIO Init] Applying bucket access policies...'
+      /usr/bin/mc anonymous set download local/nexus-avatars
+      /usr/bin/mc anonymous set none local/nexus-attachments
+
+      echo '==> [MinIO Init] Storage setup verified successfully:'
+      /usr/bin/mc ls local
+    restart: "no"
+
   # ── Services ──
   nexus-api:
     build:
@@ -63,13 +118,17 @@ services:
         condition: service_started
       postgres:
         condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
 
   nexus-socket:
     build:
       context: ./services/nexus-socket
       dockerfile: Dockerfile
     ports:
-      - "3000:3001"
+      - "3001:3001"
     env_file: .env.local
     depends_on:
       redis:
@@ -136,3 +195,4 @@ services:
 
 volumes:
   qdrant_storage:
+  minio_storage:

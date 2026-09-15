@@ -3,13 +3,13 @@
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![Architecture](https://img.shields.io/badge/architecture-polyglot_microservices-blue.svg)]()
 [![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go&logoColor=white)]()
-[![Node.js](https://img.shields.io/badge/Node.js-20-339933?logo=node.js&logoColor=white)]()
+[![Elixir](https://img.shields.io/badge/Elixir-1.14+-4B275F?logo=elixir&logoColor=white)]()
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)]()
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)]()
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)]()
 [![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)]()
 [![Qdrant](https://img.shields.io/badge/Qdrant-Vector_DB-E63946?logo=qdrant&logoColor=white)]()
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 Nexus Workplace AI is an enterprise-grade agentic collaboration platform that integrates high-concurrency real-time communication with context-aware artificial intelligence.
 
@@ -35,7 +35,7 @@ graph TB
 
     subgraph ServiceMesh["Microservices Layer"]
         API["nexus-api :8080\n(Go / Gin / sqlc)"]
-        SOCK["nexus-socket :3001\n(Node.js / Socket.IO)"]
+        SOCK["nexus-socket :3001\n(Elixir / Phoenix / Bandit)"]
         WORKER["nexus-ai-worker\n(Go Agent Orchestrator)"]
         RAG["nexus-rag :50051\n(Python / gRPC / BGE-M3)"]
         GATEWAY["nexus-ai-gateway :8081\n(Go / gRPC Multi-Model Router)"]
@@ -117,8 +117,8 @@ graph TB
 
 | Service | Technology Stack | Port / Protocol | Core Responsibilities |
 |---|---|---|---|
-| [`nexus-api`](services/nexus-api) | Go 1.22+, Gin, `pgx/v5`, `sqlc` | `:8080` (HTTP REST) | User auth (JWT), tenant and workspace management, group invite codes, RBAC, audit logging, message history. |
-| [`nexus-socket`](services/nexus-socket) | Node.js 20, Socket.IO, `pg`, Redis | `:3001` (WebSocket / HTTP) | Real-time messaging, room authorization, atomic CTE persistence, emoji reactions, thread replies, AI stream relay. |
+| [`nexus-api`](services/nexus-api) | Go 1.25, Gin, `pgx/v5`, `sqlc`, MinIO S3 | `:8080` (HTTP REST) | User auth (JWT), user discovery, direct 1:1 chats, MinIO pre-signed URLs, tenant & workspace management, RBAC. |
+| [`nexus-socket`](services/nexus-socket) | Elixir 1.14+, Phoenix OTP, Bandit | `:3001` (WebSocket / HTTP) | Real-time Socket.IO v4 gateway, Delta-CRDT presence (`Phoenix.Tracker`), soft real-time AI token streaming. |
 | [`nexus-rag`](services/nexus-rag) | Python 3.12, FastAPI, gRPC, PyTorch | `:50051` (gRPC) / `:8000` (HTTP) | BGE-M3 dense/sparse embeddings, Qdrant hybrid vector search, BGE-Reranker cross-encoder scoring, token estimation. |
 | [`nexus-ai-gateway`](services/nexus-ai-gateway) | Go 1.22+, gRPC, Sony `gobreaker` | `:8081` (gRPC) | Multi-provider LLM routing (Groq, Gemini, Claude, OpenAI, DeepSeek), circuit breakers, response caching, streaming. |
 | [`nexus-ai-worker`](services/nexus-ai-worker) | Go 1.22+, GCP Cloud Pub/Sub, gRPC | Background Worker | Asynchronous queue consumer (`ai.inference`, `embed.messages`), context synthesis, stream publishing, DB persistence. |
@@ -206,7 +206,7 @@ This provisions the following services:
 | `qdrant` | 6333, 6334 | Qdrant vector database |
 | `pubsub-emulator` | 8085 | GCP Pub/Sub emulator with auto-provisioned topics |
 | `nexus-api` | 8080 | Go REST API |
-| `nexus-socket` | 3000 | Node.js Socket.IO (container port 3001) |
+| `nexus-socket` | 3001 | Elixir / Phoenix OTP Socket.IO gateway |
 | `nexus-rag` | 50051, 8000 | Python gRPC and HTTP RAG service |
 | `nexus-ai-gateway` | 8081 | Go gRPC LLM gateway |
 | `nexus-ai-worker` | — | Background Pub/Sub subscriber |
@@ -255,7 +255,7 @@ Load testing benchmarks executed with 300 concurrent workers (`tests/load/benchm
 │   └── Dockerfile
 ├── services/
 │   ├── nexus-api/              # Go REST API (Auth, Workspaces, Groups, Chats)
-│   ├── nexus-socket/           # Node.js / Socket.IO real-time microservice
+│   ├── nexus-socket/           # Elixir / Phoenix OTP Socket.IO real-time microservice
 │   ├── nexus-rag/              # Python FastAPI + gRPC BGE-M3 / Qdrant RAG
 │   ├── nexus-ai-gateway/       # Go gRPC Multi-Model LLM Gateway
 │   ├── nexus-ai-worker/        # Go Pub/Sub Consumer and Agent Orchestrator
@@ -264,10 +264,24 @@ Load testing benchmarks executed with 300 concurrent workers (`tests/load/benchm
 ├── infra/                      # Terraform GCP infrastructure modules and GKE manifests
 ├── scripts/                    # Database migrations, embedding backfill and seed scripts
 ├── tests/                      # Concurrency benchmarks and load testing scripts
-├── CURRENT_STATE.md            # Detailed technical architectural documentation
+├── docs/                       # Consolidated architecture, audit, and planning documentation
+│   ├── architecture/           # Architecture blueprints, current state, and next-gen specs
+│   ├── plans/                  # Storage & discovery plans, requirements history
+│   └── audits/                 # Security and code quality audit reports
 ├── docker-compose.yml          # Local development orchestration
 └── Makefile                    # Build and development commands
 ```
+
+---
+
+## Documentation
+
+Consolidated technical specifications and architectural documentation are available in the [`docs/`](docs/) directory:
+- **[System Architecture Blueprint](docs/architecture/ARCHITECTURE.md)**: Production SaaS architecture and GCP topology.
+- **[Current State & Technical Inventory](docs/architecture/CURRENT_STATE.md)**: Polyglot microservices system breakdown.
+- **[Next-Generation Architecture Specification](docs/architecture/NEXUS_NEXT_GEN_ARCHITECTURE.md)**: High-concurrency distributed Elixir/OTP architecture.
+- **[User Discovery & Object Storage Plan](docs/plans/NEXUS_API_STORAGE_AND_DISCOVERY_PLAN.md)**: MinIO S3 storage, pre-signed URLs, and contact discovery.
+- **[Security & Reliability Audit Report](docs/audits/NEXUS_API_AUDIT_REPORT.md)**: Full-depth audit findings and mitigations for `nexus-api`.
 
 ---
 
@@ -289,4 +303,4 @@ Load testing benchmarks executed with 300 concurrent workers (`tests/load/benchm
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.

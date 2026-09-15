@@ -1,0 +1,47 @@
+# ==============================================================================
+# Nexus API (.gitignore)
+# ==============================================================================
+
+# Compiled Binaries and Output Directories
+/bin/
+/nexus-api
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test and Coverage Artifacts
+*.out
+*.html
+coverage.txt
+profile.out
+c.out
+
+# Local Environment Overrides and Secrets
+.env
+.env.*
+!.env.example
+
+# Temporary and Scratch Directories
+tmp/
+temp/
+*.tmp
+*.swp
+*~
+
+# Operating System Files
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+
+# IDE and Editor Directories
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Build and Module Cache
+.cache/

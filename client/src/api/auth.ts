@@ -1,4 +1,5 @@
 import apiClient from "./client"
+import { validateAvatarFile } from "../lib/fileSecurity"
 
 export async function updateProfile(
   username?: string,
@@ -23,14 +24,20 @@ export async function getProfile() {
 }
 
 export async function uploadAvatar(file: File) {
+  const validation = validateAvatarFile(file)
+  if (!validation.valid) {
+    throw new Error(validation.error || "Invalid avatar image.")
+  }
+
   const formData = new FormData()
-  formData.append("file", file)
+  formData.append("file", file, validation.sanitizedName || file.name)
 
   const res = await apiClient.post("/api/auth/profile/avatar", formData, {
     headers: { "Content-Type": "multipart/form-data" },
   })
   return res.data
 }
+
 
 export async function deleteAccount() {
   const res = await apiClient.delete("/api/auth/profile")
